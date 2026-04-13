@@ -7,7 +7,7 @@
     "dev": "bunx tauri dev",
     "build": "bunx tauri build",
     "vite:dev": "vite",
-    "vite:build": "tsc && vite build",
+    "vite:build": "bunx tsc && bunx vite build",
     "preview": "vite preview",
     "tauri": "bunx tauri",
     "lint": "eslint src",

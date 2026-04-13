@@ -48,11 +48,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - name: Cache Rust build artefacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
       - name: Install frontend deps
         run: bun install
 
+      - name: Build frontend
+        run: bun run vite:build
+
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0.6
+        uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -62,4 +70,4 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
-          tauriScript: bunx tauri
+          tauriScript: bun run tauri
