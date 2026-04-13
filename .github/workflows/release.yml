@@ -52,7 +52,7 @@ jobs:
         run: bun install
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0.5.18
+        uses: tauri-apps/tauri-action@v0.6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -62,3 +62,4 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+          tauriScript: bunx tauri
