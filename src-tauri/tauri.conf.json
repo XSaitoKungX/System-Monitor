@@ -41,7 +41,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIwNUYyMzVEOTNGRDBEMTMKUldRVERmMlRYU05mc0xZS1hxeEFLNEg5M0JrSVRUVy81RWtVUzdFYkNEQVNIaFdpZktOR29UZEkK",
       "endpoints": [
         "https://github.com/XSaitoKungX/System-Monitor/releases/latest/download/latest.json"
       ]
