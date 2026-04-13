@@ -46,7 +46,17 @@ pub fn get_processes(state: State<SysState>) -> Vec<ProcessInfo> {
 
 #[tauri::command]
 pub fn kill_process(state: State<SysState>, pid: u32) -> Result<(), String> {
-    let sys = state.sys.lock().unwrap();
+    // Reject system-reserved PIDs
+    #[cfg(target_os = "windows")]
+    if pid == 0 || pid == 4 {
+        return Err("Cannot kill a system process".to_string());
+    }
+    #[cfg(not(target_os = "windows"))]
+    if pid <= 1 {
+        return Err("Cannot kill a system process".to_string());
+    }
+
+    let sys = state.sys.lock().map_err(|e| e.to_string())?;
     let pid_obj = sysinfo::Pid::from_u32(pid);
     if let Some(process) = sys.process(pid_obj) {
         if process.kill_with(Signal::Kill).is_none() {

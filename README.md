@@ -236,6 +236,31 @@ System-Monitor/
 
 ---
 
+## Custom App Icon
+
+To replace the default Tauri icon with your own:
+
+1. Prepare a **1024×1024 PNG** with transparency (e.g. `my-icon.png`)
+2. Run the Tauri icon generator — it produces all required sizes automatically:
+   ```bash
+   bunx tauri icon ./my-icon.png
+   ```
+3. This overwrites all files in `src-tauri/icons/` (`.ico`, `.icns`, all `Square*.png`, etc.)
+4. Rebuild the app — the new icon appears in the title bar, taskbar, installer and system tray
+
+> The tray icon is loaded at startup from `app.default_window_icon()` set by the bundle config.
+
+## System Tray
+
+The app minimises to the system tray when you close the window (×). It does **not** exit.
+
+| Action | Result |
+|--------|--------|
+| Click × (close button) | Hides to tray |
+| Left-click tray icon | Shows & focuses window |
+| Tray → **Show Window** | Shows & focuses window |
+| Tray → **Quit System Monitor** | Exits the app completely |
+
 ## Recommended IDE Setup
 
 - [VS Code](https://code.visualstudio.com/) or [Windsurf](https://codeium.com/windsurf)

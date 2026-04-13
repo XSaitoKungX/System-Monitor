@@ -1,10 +1,100 @@
 use crate::models::gpu::GpuStats;
 
-#[cfg(not(target_os = "linux"))]
+// ── Windows ───────────────────────────────────────────────────────────────────
+#[cfg(target_os = "windows")]
+use crate::models::gpu::GpuInfo;
+
+#[cfg(target_os = "windows")]
 #[tauri::command]
 pub fn get_gpu_stats() -> GpuStats {
-    #[cfg(target_os = "windows")]
-    let note = "GPU monitoring on Windows requires NVIDIA NVML or DXGI — coming soon.".to_string();
+    use wmi::{COMLibrary, WMIConnection};
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct VideoController {
+        #[serde(rename = "Name")]
+        name: String,
+        #[serde(rename = "DriverVersion")]
+        driver_version: Option<String>,
+        #[serde(rename = "AdapterRAM")]
+        adapter_ram: Option<u32>,
+        #[serde(rename = "PNPDeviceID")]
+        pnp_device_id: Option<String>,
+    }
+
+    let com = match COMLibrary::new() {
+        Ok(c) => c,
+        Err(e) => return GpuStats {
+            gpus: vec![],
+            platform_note: Some(format!("WMI COM init failed: {e}")),
+        },
+    };
+    let wmi = match WMIConnection::new(com.into()) {
+        Ok(w) => w,
+        Err(e) => return GpuStats {
+            gpus: vec![],
+            platform_note: Some(format!("WMI connection failed: {e}")),
+        },
+    };
+
+    let controllers: Vec<VideoController> = wmi
+        .raw_query("SELECT Name, DriverVersion, AdapterRAM, PNPDeviceID FROM Win32_VideoController")
+        .unwrap_or_default();
+
+    let components = sysinfo::Components::new_with_refreshed_list();
+
+    let gpus: Vec<GpuInfo> = controllers
+        .into_iter()
+        .filter(|g| {
+            // Skip Microsoft Basic Display Adapter and Remote Desktop virtual GPUs
+            !g.name.contains("Basic Display") && !g.name.contains("Remote Desktop")
+        })
+        .enumerate()
+        .map(|(i, gpu)| {
+            let pnp = gpu.pnp_device_id.as_deref().unwrap_or("");
+            let vendor = if pnp.contains("VEN_10DE") || gpu.name.to_ascii_uppercase().contains("NVIDIA") {
+                "NVIDIA".to_string()
+            } else if pnp.contains("VEN_1002") || gpu.name.to_ascii_uppercase().contains("AMD") || gpu.name.to_ascii_uppercase().contains("RADEON") {
+                "AMD".to_string()
+            } else if pnp.contains("VEN_8086") || gpu.name.to_ascii_uppercase().contains("INTEL") {
+                "Intel".to_string()
+            } else {
+                "Unknown".to_string()
+            };
+
+            // Try to match temperature from sysinfo components
+            let temperature = components.iter()
+                .find(|c| c.label().to_ascii_lowercase().contains("gpu"))
+                .and_then(|c| c.temperature());
+
+            // AdapterRAM is a uint32 in WMI — max 4 GB (limitation of Win32_VideoController)
+            let vram_total = gpu.adapter_ram.unwrap_or(0) as u64;
+
+            GpuInfo {
+                index: i,
+                name: gpu.name,
+                vendor,
+                driver: gpu.driver_version.unwrap_or_else(|| "—".to_string()),
+                vram_total_bytes: vram_total,
+                vram_used_bytes: 0,
+                vram_usage_percent: 0.0,
+                gpu_usage_percent: 0.0,
+                temperature,
+                power_watts: None,
+                freq_mhz: None,
+                max_freq_mhz: None,
+                card_path: String::new(),
+            }
+        })
+        .collect();
+
+    GpuStats { gpus, platform_note: None }
+}
+
+// ── macOS / other ─────────────────────────────────────────────────────────────
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[tauri::command]
+pub fn get_gpu_stats() -> GpuStats {
     #[cfg(target_os = "macos")]
     let note = "GPU monitoring on macOS requires IOKit integration — coming soon.".to_string();
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]

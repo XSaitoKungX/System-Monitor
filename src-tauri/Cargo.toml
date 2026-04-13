@@ -1,6 +1,6 @@
 [package]
 name = "system-monitor"
-version = "0.1.0"
+version = "0.2.0"
 description = "Modern system monitor — open source replacement for Task Manager, htop and btop"
 authors = ["XSaitoKungX"]
 edition = "2021"
@@ -25,6 +25,9 @@ sysinfo = "0.33"
 tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
 nvml-wrapper = { version = "0.10", optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+wmi = "0.13"
 
 [features]
 default = []
