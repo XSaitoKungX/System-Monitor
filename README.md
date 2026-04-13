@@ -164,7 +164,7 @@ git push --tags
 ```
 
 The workflow builds on:
-- `ubuntu-22.04` → `.deb`, `.rpm`, `.AppImage`
+- `ubuntu-24.04` → `.deb`, `.rpm`, `.AppImage`
 - `windows-latest` → `.exe`, `.msi`
 - `macos-latest (arm64)` → `.dmg` (Apple Silicon)
 - `macos-latest (x64)` → `.dmg` (Intel Mac)
