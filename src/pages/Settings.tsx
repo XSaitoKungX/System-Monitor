@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { useAppStore } from "@/store/useAppStore";
 import type { Theme } from "@/types";
 import {
   GitBranch, Globe, Bug, Sparkles, Shield, Lock, RefreshCw,
-  Code2, ExternalLink, Cpu, Zap, Package,
+  Code2, ExternalLink, Cpu, Zap, Package, Download, CheckCircle, AlertCircle,
 } from "lucide-react";
 import appIcon from "/icon.png";
 import saitoIcon from "/saito-icon.png";
@@ -158,7 +160,55 @@ function SettingsTab() {
   );
 }
 
+type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "uptodate" | "error";
+
 function AboutTab() {
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateProgress, setUpdateProgress] = useState<number>(0);
+
+  const handleCheckUpdate = async () => {
+    setUpdateStatus("checking");
+    setUpdateError(null);
+    setUpdateVersion(null);
+    try {
+      const update = await check();
+      if (update?.available) {
+        setUpdateVersion(update.version);
+        setUpdateStatus("available");
+      } else {
+        setUpdateStatus("uptodate");
+        setTimeout(() => setUpdateStatus("idle"), 3000);
+      }
+    } catch (e) {
+      setUpdateError(String(e));
+      setUpdateStatus("error");
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    setUpdateStatus("downloading");
+    setUpdateProgress(0);
+    try {
+      const update = await check();
+      if (!update?.available) return;
+      let downloaded = 0;
+      let total = 0;
+      await update.downloadAndInstall((event) => {
+        if (event.event === "Started") { total = event.data.contentLength ?? 0; }
+        if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          if (total > 0) setUpdateProgress(Math.round((downloaded / total) * 100));
+        }
+      });
+      await relaunch();
+    } catch (e) {
+      setUpdateError(String(e));
+      setUpdateStatus("error");
+    }
+  };
+
   return (
     <div className="space-y-5">
       {/* Hero */}
@@ -176,7 +226,7 @@ function AboutTab() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium"
                 style={{ background: "rgb(var(--accent)/0.15)", color: "rgb(var(--accent))" }}>
-                v0.1.0
+                v0.2.0
               </span>
               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium"
                 style={{ background: "rgb(var(--success)/0.12)", color: "rgb(var(--success))" }}>
@@ -213,6 +263,70 @@ function AboutTab() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Updates */}
+      <div className="glass p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <RefreshCw size={14} style={{ color: "rgb(var(--accent))" }} />
+            <h2 className="text-sm font-semibold text-primary">Updates</h2>
+          </div>
+          {updateStatus === "idle" && (
+            <button
+              onClick={handleCheckUpdate}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+              style={{ borderColor: "rgb(var(--accent)/0.4)", color: "rgb(var(--accent))", background: "rgb(var(--accent)/0.08)" }}
+            >
+              Check for Updates
+            </button>
+          )}
+          {updateStatus === "checking" && (
+            <span className="text-xs text-muted flex items-center gap-1.5">
+              <RefreshCw size={12} className="animate-spin" /> Checking…
+            </span>
+          )}
+          {updateStatus === "uptodate" && (
+            <span className="text-xs flex items-center gap-1.5" style={{ color: "rgb(var(--success))" }}>
+              <CheckCircle size={12} /> Up to date
+            </span>
+          )}
+          {updateStatus === "error" && (
+            <span className="text-xs flex items-center gap-1.5" style={{ color: "rgb(var(--danger))" }}>
+              <AlertCircle size={12} /> Error
+            </span>
+          )}
+        </div>
+        {updateStatus === "available" && updateVersion && (
+          <div className="rounded-lg p-3 flex items-center justify-between gap-3"
+            style={{ background: "rgb(var(--accent)/0.08)", border: "1px solid rgb(var(--accent)/0.2)" }}>
+            <div>
+              <p className="text-sm font-medium text-primary">v{updateVersion} available</p>
+              <p className="text-xs text-muted">A new version is ready to install</p>
+            </div>
+            <button
+              onClick={handleInstallUpdate}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shrink-0"
+              style={{ background: "rgb(var(--accent))", color: "#fff" }}
+            >
+              <Download size={12} /> Install
+            </button>
+          </div>
+        )}
+        {updateStatus === "downloading" && (
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-xs text-muted">
+              <span>Downloading update…</span>
+              <span>{updateProgress}%</span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgb(var(--bg-hover))" }}>
+              <div className="h-full rounded-full transition-all" style={{ width: `${updateProgress}%`, background: "rgb(var(--accent))" }} />
+            </div>
+          </div>
+        )}
+        {updateStatus === "error" && updateError && (
+          <p className="text-xs" style={{ color: "rgb(var(--danger))" }}>{updateError}</p>
+        )}
       </div>
 
       {/* Links */}

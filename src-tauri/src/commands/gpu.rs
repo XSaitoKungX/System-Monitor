@@ -21,8 +21,8 @@ pub fn get_gpu_stats() -> GpuStats {
         #[serde(rename = "PNPDeviceID")]
         pnp_device_id: Option<String>,
     }
-
-    let com = match COMLibrary::new() {
+    
+    let com = match COMLibrary::without_security() {
         Ok(c) => c,
         Err(e) => return GpuStats {
             gpus: vec![],

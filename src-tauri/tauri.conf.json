@@ -36,7 +36,15 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src https://speed.cloudflare.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
+      "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src https://speed.cloudflare.com https://github.com https://objects.githubusercontent.com https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": [
+        "https://github.com/XSaitoKungX/System-Monitor/releases/latest/download/latest.json"
+      ]
     }
   },
   "bundle": {
