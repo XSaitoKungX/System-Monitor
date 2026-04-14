@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useRef } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { useAppStore } from "@/store/useAppStore";
-import { invoke } from "@tauri-apps/api/core";
+import { useStatsStore } from "@/store/useStatsStore";
+import { useRefreshIntervalSync } from "@/hooks/useSystemStats";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
 const Dashboard = lazy(() => import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard })));
@@ -39,6 +40,9 @@ function App() {
   const notifiedAlerts = useRef<Set<string>>(new Set());
   const permGranted = useRef(false);
 
+  // Sync refresh interval to backend push loop
+  useRefreshIntervalSync();
+
   // Init attributes on mount (single pass)
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -56,47 +60,40 @@ function App() {
     });
   }, []);
 
-  // Alert checker — stable callback using a ref snapshot of alerts
+  // Alert checker — reads from the push-event store, no extra invoke needed
   const alertsRef = useRef(alerts);
   useEffect(() => { alertsRef.current = alerts; }, [alerts]);
 
-  const checkAlerts = useCallback(async () => {
+  const checkAlerts = useCallback(() => {
     const activeAlerts = alertsRef.current.filter((a) => a.enabled);
     if (activeAlerts.length === 0) return;
 
-    try {
-      const [cpu, memory, disk, network] = await Promise.all([
-        invoke<{ usage_total: number }>("get_cpu_stats").catch(() => null),
-        invoke<{ usage_percent: number }>("get_memory_stats").catch(() => null),
-        invoke<{ disks: Array<{ usage_percent: number }> }>("get_disk_stats").catch(() => null),
-        invoke<{ primary_rx_per_sec: number }>("get_network_stats").catch(() => null),
-      ]);
+    const { cpu, mem, disk, net } = useStatsStore.getState();
 
-      for (const alert of activeAlerts) {
-        let value = 0;
-        switch (alert.metric) {
-          case "cpu":     value = cpu?.usage_total ?? 0; break;
-          case "memory":  value = memory?.usage_percent ?? 0; break;
-          case "disk":    value = disk?.disks.length
-            ? disk.disks.reduce((s, d) => s + d.usage_percent, 0) / disk.disks.length
-            : 0; break;
-          case "network": value = (network?.primary_rx_per_sec ?? 0) / 1_000_000; break;
-        }
-
-        const key = `${alert.metric}-${alert.threshold}`;
-        if (value > alert.threshold) {
-          if (!notifiedAlerts.current.has(key)) {
-            sendNotification({
-              title: "System Monitor Alert",
-              body: `${alert.label}: ${value.toFixed(1)}${alert.metric === "network" ? " MB/s" : "%"} (limit: ${alert.threshold}${alert.metric === "network" ? " MB/s" : "%"})`,
-            });
-            notifiedAlerts.current.add(key);
-          }
-        } else {
-          notifiedAlerts.current.delete(key);
-        }
+    for (const alert of activeAlerts) {
+      let value = 0;
+      switch (alert.metric) {
+        case "cpu":     value = cpu?.usage_total ?? 0; break;
+        case "memory":  value = mem?.usage_percent ?? 0; break;
+        case "disk":    value = disk?.disks.length
+          ? disk.disks.reduce((s, d) => s + d.usage_percent, 0) / disk.disks.length
+          : 0; break;
+        case "network": value = (net?.total_received_per_sec ?? 0) / 1_000_000; break;
       }
-    } catch { /* silent */ }
+
+      const key = `${alert.metric}-${alert.threshold}`;
+      if (value > alert.threshold) {
+        if (!notifiedAlerts.current.has(key)) {
+          sendNotification({
+            title: "System Monitor Alert",
+            body: `${alert.label}: ${value.toFixed(1)}${alert.metric === "network" ? " MB/s" : "%"} (limit: ${alert.threshold}${alert.metric === "network" ? " MB/s" : "%"})`,
+          });
+          notifiedAlerts.current.add(key);
+        }
+      } else {
+        notifiedAlerts.current.delete(key);
+      }
+    }
   }, []);
 
   useEffect(() => {

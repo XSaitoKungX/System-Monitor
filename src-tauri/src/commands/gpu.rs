@@ -421,6 +421,20 @@ fn gpu_usage(card_path: &Path) -> f32 {
 
 #[cfg(target_os = "linux")]
 fn gpu_freq_mhz(card_path: &Path) -> Option<u32> {
+    // AMD: pp_dpm_sclk — current core clock (line with * marker)
+    let sclk_path = card_path.join("device/pp_dpm_sclk");
+    if let Some(content) = read_sysfs(sclk_path.to_str().unwrap_or("")) {
+        for line in content.lines().rev() {
+            if line.contains('*') {
+                if let Some(mhz) = line.split_whitespace()
+                    .find(|s| s.to_lowercase().ends_with("mhz"))
+                    .and_then(|s| s[..s.len()-3].parse::<u32>().ok())
+                {
+                    return Some(mhz);
+                }
+            }
+        }
+    }
     // Intel: current clock frequency in MHz
     let paths = [
         card_path.join("gt_act_freq_mhz"),

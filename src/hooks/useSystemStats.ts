@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type {
   CpuStats,
   MemoryStats,
@@ -12,120 +13,78 @@ import type {
 import { useAppStore } from "@/store/useAppStore";
 import { useStatsStore } from "@/store/useStatsStore";
 
-export function useCpuStats() {
+// Sync refresh interval with backend whenever it changes
+export function useRefreshIntervalSync() {
   const refreshInterval = useAppStore((s) => s.refreshInterval);
+  useEffect(() => {
+    invoke("set_refresh_interval", { intervalMs: refreshInterval }).catch(() => {});
+  }, [refreshInterval]);
+}
+
+export function useCpuStats() {
   const { setCpu } = useStatsStore();
   const data = useStatsStore((s) => s.cpu);
   const history = useStatsStore((s) => s.cpuHistory);
 
-  const fetchStats = useCallback(async () => {
-    try {
-      const stats = await invoke<CpuStats>("get_cpu_stats");
-      setCpu(stats);
-    } catch (e) {
-      console.error("Failed to fetch CPU stats", e);
-    }
-  }, [setCpu]);
-
   useEffect(() => {
-    fetchStats();
-    const id = setInterval(fetchStats, refreshInterval);
-    return () => clearInterval(id);
-  }, [fetchStats, refreshInterval]);
+    const unlisten = listen<CpuStats>("stats:cpu", (e) => setCpu(e.payload));
+    return () => { unlisten.then((f) => f()); };
+  }, [setCpu]);
 
   return { data, history };
 }
 
 export function useMemoryStats() {
-  const refreshInterval = useAppStore((s) => s.refreshInterval);
   const { setMem } = useStatsStore();
   const data = useStatsStore((s) => s.mem);
   const history = useStatsStore((s) => s.memHistory);
 
-  const fetchStats = useCallback(async () => {
-    try {
-      const stats = await invoke<MemoryStats>("get_memory_stats");
-      setMem(stats);
-    } catch (e) {
-      console.error("Failed to fetch memory stats", e);
-    }
-  }, [setMem]);
-
   useEffect(() => {
-    fetchStats();
-    const id = setInterval(fetchStats, refreshInterval);
-    return () => clearInterval(id);
-  }, [fetchStats, refreshInterval]);
+    const unlisten = listen<MemoryStats>("stats:mem", (e) => setMem(e.payload));
+    return () => { unlisten.then((f) => f()); };
+  }, [setMem]);
 
   return { data, history };
 }
 
 export function useDiskStats() {
-  const [data, setData] = useState<DiskStats | null>(null);
-  const refreshInterval = useAppStore((s) => s.refreshInterval);
-
-  const fetch = useCallback(async () => {
-    try {
-      const stats = await invoke<DiskStats>("get_disk_stats");
-      setData(stats);
-    } catch (e) {
-      console.error("Failed to fetch disk stats", e);
-    }
-  }, []);
+  const { setDisk } = useStatsStore();
+  const data = useStatsStore((s) => s.disk);
 
   useEffect(() => {
-    fetch();
-    const id = setInterval(fetch, refreshInterval);
-    return () => clearInterval(id);
-  }, [fetch, refreshInterval]);
+    const unlisten = listen<DiskStats>("stats:disk", (e) => setDisk(e.payload));
+    return () => { unlisten.then((f) => f()); };
+  }, [setDisk]);
 
   return { data };
 }
 
 export function useGpuStats() {
   const [data, setData] = useState<GpuStats | null>(null);
-  const refreshInterval = useAppStore((s) => s.refreshInterval);
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const stats = await invoke<GpuStats>("get_gpu_stats");
-      setData(stats);
-    } catch (e) {
-      console.error("Failed to fetch GPU stats", e);
-    }
-  }, []);
 
   useEffect(() => {
-    fetchStats();
-    const id = setInterval(fetchStats, refreshInterval);
-    return () => clearInterval(id);
-  }, [fetchStats, refreshInterval]);
+    const unlisten = listen<GpuStats>("stats:gpu", (e) => setData(e.payload));
+    return () => { unlisten.then((f) => f()); };
+  }, []);
 
   return { data };
 }
 
 export function useNetworkStats() {
-  const [data, setData] = useState<NetworkStats | null>(null);
+  const { setNet } = useStatsStore();
+  const data = useStatsStore((s) => s.net);
   const [rxHistory, setRxHistory] = useState<number[]>([]);
   const [txHistory, setTxHistory] = useState<number[]>([]);
-  const refreshInterval = useAppStore((s) => s.refreshInterval);
-
-  const fetch = useCallback(async () => {
-    try {
-      const stats = await invoke<NetworkStats>("get_network_stats");
-      setData(stats);
-      setRxHistory((prev) => [...prev.slice(-59), stats.total_received_per_sec]);
-      setTxHistory((prev) => [...prev.slice(-59), stats.total_transmitted_per_sec]);
-    } catch (e) {
-      console.error("Failed to fetch network stats", e);
-    }
-  }, []);
 
   useEffect(() => {
-    fetch();
-    const id = setInterval(fetch, refreshInterval);
-    return () => clearInterval(id);
-  }, [fetch, refreshInterval]);
+    const unlisten = listen<NetworkStats>("stats:net", (e) => {
+      const stats = e.payload;
+      setNet(stats);
+      setRxHistory((prev) => [...prev.slice(-59), stats.total_received_per_sec]);
+      setTxHistory((prev) => [...prev.slice(-59), stats.total_transmitted_per_sec]);
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, [setNet]);
 
   return { data, rxHistory, txHistory };
 }
@@ -135,7 +94,7 @@ export function useProcesses() {
   const [loading, setLoading] = useState(false);
   const refreshInterval = useAppStore((s) => s.refreshInterval);
 
-  const fetch = useCallback(async () => {
+  const fetchProcesses = useCallback(async () => {
     try {
       const procs = await invoke<ProcessInfo[]>("get_processes");
       setData(procs);
@@ -148,21 +107,21 @@ export function useProcesses() {
     setLoading(true);
     try {
       await invoke("kill_process", { pid });
-      await fetch();
+      await fetchProcesses();
     } catch (e) {
       console.error("Failed to kill process", e);
     } finally {
       setLoading(false);
     }
-  }, [fetch]);
+  }, [fetchProcesses]);
 
   useEffect(() => {
-    fetch();
-    const id = setInterval(fetch, refreshInterval);
+    fetchProcesses();
+    const id = setInterval(fetchProcesses, refreshInterval);
     return () => clearInterval(id);
-  }, [fetch, refreshInterval]);
+  }, [fetchProcesses, refreshInterval]);
 
-  return { data, loading, killProcess, refresh: fetch };
+  return { data, loading, killProcess, refresh: fetchProcesses };
 }
 
 export function useSystemInfo() {

@@ -13,6 +13,8 @@ use commands::webview::open_speedtest;
 
 use tauri::{Manager, Emitter};
 use serde::Deserialize;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 #[derive(Deserialize)]
 struct WindowBehavior {
@@ -39,17 +41,52 @@ fn show_window(app: tauri::AppHandle) {
     }
 }
 
+#[tauri::command]
+fn set_refresh_interval(interval_ms: u64, interval_state: tauri::State<Arc<Mutex<u64>>>) {
+    let clamped = interval_ms.clamp(500, 10_000);
+    *interval_state.lock().unwrap() = clamped;
+}
+
+fn spawn_stats_loop(app: tauri::AppHandle, interval_state: Arc<Mutex<u64>>) {
+    std::thread::spawn(move || {
+        loop {
+            let interval_ms = *interval_state.lock().unwrap();
+
+            let state = app.state::<state::SysState>();
+
+            let cpu  = get_cpu_stats(state.clone());
+            let mem  = get_memory_stats(state.clone());
+            let disk = get_disk_stats();
+            let net  = get_network_stats(state.clone());
+            let gpu  = get_gpu_stats();
+
+            let _ = app.emit("stats:cpu",  &cpu);
+            let _ = app.emit("stats:mem",  &mem);
+            let _ = app.emit("stats:disk", &disk);
+            let _ = app.emit("stats:net",  &net);
+            let _ = app.emit("stats:gpu",  &gpu);
+
+            std::thread::sleep(Duration::from_millis(interval_ms));
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let interval_state: Arc<Mutex<u64>> = Arc::new(Mutex::new(3000));
+
     tauri::Builder::default()
         .manage(state::SysState::new())
+        .manage(interval_state.clone())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .setup(|app| {
+        .setup({
+            let interval_state = interval_state.clone();
+            move |app| {
             // Check if we should start minimized (read from store file)
             let app_path = app.path().app_local_data_dir().ok();
             let start_minimized = app_path.and_then(|p| {
@@ -111,8 +148,11 @@ pub fn run() {
             // Emit event that frontend can use to send window behavior
             let _ = app.emit("window-ready", ());
 
+            // Start background stats push loop
+            spawn_stats_loop(app.handle().clone(), interval_state.clone());
+
             Ok(())
-        })
+        }})
         // Closing the main window behavior depends on closeToTray setting
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -144,6 +184,7 @@ pub fn run() {
             update_window_behavior,
             hide_window,
             show_window,
+            set_refresh_interval,
         ])
         .run(tauri::generate_context!())
         .expect("error while running system monitor");
