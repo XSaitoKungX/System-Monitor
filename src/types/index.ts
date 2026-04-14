@@ -7,6 +7,11 @@ export interface CpuStats {
   brand: string;
   vendor: string;
   temperature: number | null;
+  architecture: string;
+  cache_l1_kb: number | null;
+  cache_l2_kb: number | null;
+  cache_l3_kb: number | null;
+  features: string[];
 }
 
 export interface MemoryStats {
@@ -17,6 +22,11 @@ export interface MemoryStats {
   swap_total_bytes: number;
   swap_used_bytes: number;
   swap_usage_percent: number;
+  cached_bytes: number | null;
+  buffers_bytes: number | null;
+  dirty_bytes: number | null;
+  active_bytes: number | null;
+  inactive_bytes: number | null;
 }
 
 export interface DiskInfo {
@@ -67,8 +77,12 @@ export interface GpuInfo {
   gpu_usage_percent: number;
   temperature: number | null;
   power_watts: number | null;
+  power_limit_watts: number | null;
   freq_mhz: number | null;
   max_freq_mhz: number | null;
+  mem_freq_mhz: number | null;
+  fan_speed_percent: number | null;
+  fan_rpm: number | null;
   card_path: string;
 }
 

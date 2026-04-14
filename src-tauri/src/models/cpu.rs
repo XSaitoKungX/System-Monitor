@@ -10,4 +10,9 @@ pub struct CpuStats {
     pub brand: String,
     pub vendor: String,
     pub temperature: Option<f32>,
+    pub architecture: String,
+    pub cache_l1_kb: Option<u32>,
+    pub cache_l2_kb: Option<u32>,
+    pub cache_l3_kb: Option<u32>,
+    pub features: Vec<String>,
 }

@@ -1,4 +1,4 @@
-import { Monitor, Thermometer, Zap, HardDrive, Activity } from "lucide-react";
+import { Monitor, Thermometer, Zap, HardDrive, Activity, Wind, Cpu } from "lucide-react";
 import { useGpuStats } from "@/hooks/useSystemStats";
 import { formatBytes, getUsageColor } from "@/lib/utils";
 import type { GpuInfo } from "@/types";
@@ -81,11 +81,27 @@ function GpuCard({ gpu }: { gpu: GpuInfo }) {
             value={gpu.temperature != null ? `${gpu.temperature.toFixed(0)}°C` : "N/A"}
             color={gpu.temperature != null ? getUsageColor(gpu.temperature) : undefined} />
           <StatTile icon={<Zap size={12} />} label="Power"
-            value={gpu.power_watts != null ? `${gpu.power_watts.toFixed(1)} W` : "N/A"} />
-          <StatTile icon={<HardDrive size={12} />} label={hasVram ? "VRAM Used" : "Clock"}
-            value={hasVram ? formatBytes(gpu.vram_used_bytes) : gpu.freq_mhz != null ? `${gpu.freq_mhz} MHz` : "N/A"} />
-          <StatTile icon={<Activity size={12} />} label={hasVram ? "VRAM Total" : "Max Clock"}
-            value={hasVram ? formatBytes(gpu.vram_total_bytes) : gpu.max_freq_mhz != null ? `${gpu.max_freq_mhz} MHz` : "N/A"} />
+            value={gpu.power_watts != null
+              ? gpu.power_limit_watts != null
+                ? `${gpu.power_watts.toFixed(0)} / ${gpu.power_limit_watts.toFixed(0)} W`
+                : `${gpu.power_watts.toFixed(1)} W`
+              : "N/A"} />
+          <StatTile icon={<Wind size={12} />} label="Fan Speed"
+            value={gpu.fan_speed_percent != null
+              ? gpu.fan_rpm != null
+                ? `${gpu.fan_speed_percent}% · ${gpu.fan_rpm} RPM`
+                : `${gpu.fan_speed_percent}%`
+              : "N/A"} />
+          <StatTile icon={<Cpu size={12} />} label="Core / Mem Clock"
+            value={gpu.freq_mhz != null
+              ? gpu.mem_freq_mhz != null
+                ? `${gpu.freq_mhz} / ${gpu.mem_freq_mhz} MHz`
+                : `${gpu.freq_mhz} MHz`
+              : "N/A"} />
+          <StatTile icon={<HardDrive size={12} />} label={hasVram ? "VRAM Used" : "Max Clock"}
+            value={hasVram ? formatBytes(gpu.vram_used_bytes) : gpu.max_freq_mhz != null ? `${gpu.max_freq_mhz} MHz` : "N/A"} />
+          <StatTile icon={<Activity size={12} />} label={hasVram ? "VRAM Total" : ""}
+            value={hasVram ? formatBytes(gpu.vram_total_bytes) : ""} />
         </div>
       </div>
 

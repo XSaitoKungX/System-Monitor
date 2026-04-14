@@ -68,7 +68,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "System Monitor ${{ github.ref_name }}"
           releaseBody: "See CHANGELOG.md for details."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
           tauriScript: bun run tauri

@@ -41,7 +41,7 @@ pub fn get_gpu_stats() -> GpuStats {
     #[cfg(feature = "nvidia")]
     if nvml_available {
         if let Ok(nvml) = nvml_wrapper::Nvml::init() {
-            let count_result: nvml_wrapper::error::NvmlResult<u32> = nvml.device_count();
+            let count_result: Result<u32, nvml_wrapper::error::NvmlError> = nvml.device_count();
             if let Ok(count) = count_result {
                 for i in 0..count {
                     if let Ok(device) = nvml.device_by_index(i) {
@@ -74,12 +74,17 @@ pub fn get_gpu_stats() -> GpuStats {
                             .map(|p| p as f32 / 1000.0);
 
                         // Clocks
-                        let freq_mhz = device.clock_info(nvml_wrapper::enum_wrappers::device::Clock::Graphics)
+                        let freq_mhz = device.clock_info(nvml_wrapper::enum_wrappers::device::Clock::Graphics).ok();
+                        let max_freq_mhz = device.max_clock_info(nvml_wrapper::enum_wrappers::device::Clock::Graphics).ok();
+                        let mem_freq_mhz = device.clock_info(nvml_wrapper::enum_wrappers::device::Clock::Memory).ok();
+
+                        // Power limit
+                        let power_limit_watts = device.power_management_limit()
                             .ok()
-                            .map(|c| c);
-                        let max_freq_mhz = device.max_clock_info(nvml_wrapper::enum_wrappers::device::Clock::Graphics)
-                            .ok()
-                            .map(|c| c);
+                            .map(|p| p as f32 / 1000.0);
+
+                        // Fan speed (first fan, 0-100%)
+                        let fan_speed_percent = device.fan_speed(0).ok();
 
                         nvml_gpus.push(GpuInfo {
                             index: i as usize,
@@ -92,8 +97,12 @@ pub fn get_gpu_stats() -> GpuStats {
                             gpu_usage_percent: gpu_usage,
                             temperature,
                             power_watts,
+                            power_limit_watts,
                             freq_mhz,
                             max_freq_mhz,
+                            mem_freq_mhz,
+                            fan_speed_percent,
+                            fan_rpm: None,
                             card_path: uuid.unwrap_or_default().to_string(),
                         });
                     }
@@ -197,8 +206,12 @@ pub fn get_gpu_stats() -> GpuStats {
                 gpu_usage_percent: 0.0,
                 temperature,
                 power_watts: None,
+                power_limit_watts: None,
                 freq_mhz: None,
                 max_freq_mhz: None,
+                mem_freq_mhz: None,
+                fan_speed_percent: None,
+                fan_rpm: None,
                 card_path: String::new(),
             }
         })
@@ -492,6 +505,60 @@ fn gpu_power(card_path: &Path) -> Option<f32> {
 }
 
 #[cfg(target_os = "linux")]
+fn gpu_power_limit(card_path: &Path) -> Option<f32> {
+    // AMD: hwmon power1_cap (microwatts)
+    let hwmon_dir = card_path.join("device/hwmon");
+    if let Ok(entries) = fs::read_dir(&hwmon_dir) {
+        for entry in entries.flatten() {
+            let cap_path = entry.path().join("power1_cap");
+            if let Some(raw) = read_sysfs_f32(cap_path.to_str().unwrap_or("")) {
+                return Some(raw / 1_000_000.0);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn gpu_mem_freq_mhz(card_path: &Path) -> Option<u32> {
+    // AMD: pp_dpm_mclk — current memory clock (last line with * marker)
+    let mclk_path = card_path.join("device/pp_dpm_mclk");
+    if let Some(content) = read_sysfs(mclk_path.to_str().unwrap_or("")) {
+        for line in content.lines().rev() {
+            if line.contains('*') {
+                // Format: "2: 1000Mhz *"
+                if let Some(mhz) = line.split_whitespace()
+                    .find(|s| s.to_lowercase().ends_with("mhz"))
+                    .and_then(|s| s[..s.len()-3].parse::<u32>().ok())
+                {
+                    return Some(mhz);
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn gpu_fan(card_path: &Path) -> (Option<u32>, Option<u32>) {
+    // hwmon: fan1_input (RPM), pwm1 (0-255 → %)
+    let hwmon_dir = card_path.join("device/hwmon");
+    if let Ok(entries) = fs::read_dir(&hwmon_dir) {
+        for entry in entries.flatten() {
+            let base = entry.path();
+            let rpm = read_sysfs_u64(base.join("fan1_input").to_str().unwrap_or(""))
+                .map(|v| v as u32);
+            let pct = read_sysfs_u64(base.join("pwm1").to_str().unwrap_or(""))
+                .map(|v| (v * 100 / 255) as u32);
+            if rpm.is_some() || pct.is_some() {
+                return (pct, rpm);
+            }
+        }
+    }
+    (None, None)
+}
+
+#[cfg(target_os = "linux")]
 #[tauri::command]
 pub fn get_gpu_stats() -> GpuStats {
     let drm_path = Path::new("/sys/class/drm");
@@ -528,11 +595,14 @@ pub fn get_gpu_stats() -> GpuStats {
         } else {
             0.0
         };
-        let usage       = gpu_usage(&card_path);
-        let temperature = gpu_temp(&card_path);
-        let power       = gpu_power(&card_path);
-        let freq_mhz    = gpu_freq_mhz(&card_path);
+        let usage        = gpu_usage(&card_path);
+        let temperature  = gpu_temp(&card_path);
+        let power        = gpu_power(&card_path);
+        let power_limit  = gpu_power_limit(&card_path);
+        let freq_mhz     = gpu_freq_mhz(&card_path);
         let max_freq_mhz = gpu_max_freq_mhz(&card_path);
+        let mem_freq_mhz = gpu_mem_freq_mhz(&card_path);
+        let (fan_pct, fan_rpm) = gpu_fan(&card_path);
 
         gpus.push(GpuInfo {
             index,
@@ -545,8 +615,12 @@ pub fn get_gpu_stats() -> GpuStats {
             gpu_usage_percent: usage,
             temperature,
             power_watts: power,
+            power_limit_watts: power_limit,
             freq_mhz,
             max_freq_mhz,
+            mem_freq_mhz,
+            fan_speed_percent: fan_pct,
+            fan_rpm,
             card_path: card_path.to_string_lossy().to_string(),
         });
         index += 1;

@@ -81,6 +81,21 @@ export function Memory() {
           <div className="flex flex-col gap-2">
             <BreakdownRow label="Used" bytes={data.used_bytes} pct={data.usage_percent} color="rgb(var(--success))" />
             <BreakdownRow label="Available" bytes={data.available_bytes} pct={(data.available_bytes / data.total_bytes) * 100} color="rgb(var(--accent))" />
+            {data.cached_bytes != null && (
+              <BreakdownRow label="Cached" bytes={data.cached_bytes} pct={(data.cached_bytes / data.total_bytes) * 100} color="rgb(var(--info))" />
+            )}
+            {data.buffers_bytes != null && (
+              <BreakdownRow label="Buffers" bytes={data.buffers_bytes} pct={(data.buffers_bytes / data.total_bytes) * 100} color="rgb(var(--warning))" />
+            )}
+            {data.active_bytes != null && (
+              <BreakdownRow label="Active" bytes={data.active_bytes} pct={(data.active_bytes / data.total_bytes) * 100} color="rgb(var(--danger)/0.7)" />
+            )}
+            {data.inactive_bytes != null && (
+              <BreakdownRow label="Inactive" bytes={data.inactive_bytes} pct={(data.inactive_bytes / data.total_bytes) * 100} color="rgb(var(--text-muted)/0.4)" />
+            )}
+            {data.dirty_bytes != null && data.dirty_bytes > 0 && (
+              <BreakdownRow label="Dirty" bytes={data.dirty_bytes} pct={(data.dirty_bytes / data.total_bytes) * 100} color="rgb(var(--warning)/0.6)" />
+            )}
           </div>
         </div>
         <div className="glass p-card">

@@ -3261,6 +3261,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "raw-cpuid"
+version = "11.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498cd0dc59d73224351ee52a95fee0f1a617a2eae0e7d9d720cc622c73a54186"
+dependencies = [
+ "bitflags 2.11.0",
+]
+
+[[package]]
 name = "raw-window-handle"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4142,6 +4151,7 @@ version = "0.2.2"
 dependencies = [
  "chrono",
  "nvml-wrapper",
+ "raw-cpuid",
  "serde",
  "serde_json",
  "sysinfo",

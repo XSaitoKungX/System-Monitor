@@ -51,7 +51,7 @@ export function CPU() {
           </div>
           <div>
             <p className="text-token-xs text-muted">Architecture</p>
-            <p className="text-token-base font-medium text-primary">x86_64</p>
+            <p className="text-token-base font-medium text-primary">{data.architecture}</p>
           </div>
         </div>
         <div className="glass p-card text-center">
@@ -72,6 +72,49 @@ export function CPU() {
           unit="%"
           domain={[0, 100]}
         />
+      </div>
+
+      {/* Cache + Features */}
+      <div className="grid grid-cols-2 gap-card">
+        <div className="glass p-card flex flex-col gap-3">
+          <p className="text-token-sm font-medium text-primary">Cache</p>
+          <div className="flex flex-col gap-2">
+            {data.cache_l1_kb != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-token-xs text-muted">L1</span>
+                <span className="text-token-xs font-mono text-primary">{data.cache_l1_kb >= 1024 ? `${(data.cache_l1_kb / 1024).toFixed(0)} MB` : `${data.cache_l1_kb} KB`}</span>
+              </div>
+            )}
+            {data.cache_l2_kb != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-token-xs text-muted">L2</span>
+                <span className="text-token-xs font-mono text-primary">{data.cache_l2_kb >= 1024 ? `${(data.cache_l2_kb / 1024).toFixed(0)} MB` : `${data.cache_l2_kb} KB`}</span>
+              </div>
+            )}
+            {data.cache_l3_kb != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-token-xs text-muted">L3</span>
+                <span className="text-token-xs font-mono text-primary">{data.cache_l3_kb >= 1024 ? `${(data.cache_l3_kb / 1024).toFixed(0)} MB` : `${data.cache_l3_kb} KB`}</span>
+              </div>
+            )}
+            {data.cache_l1_kb == null && data.cache_l2_kb == null && data.cache_l3_kb == null && (
+              <span className="text-token-xs text-muted">Not available</span>
+            )}
+          </div>
+        </div>
+        <div className="glass p-card flex flex-col gap-3">
+          <p className="text-token-sm font-medium text-primary">Instruction Sets</p>
+          <div className="flex flex-wrap gap-1.5">
+            {data.features.length > 0
+              ? data.features.map(f => (
+                  <span key={f} className="text-token-xs font-mono px-1.5 py-0.5 rounded"
+                    style={{ background: "rgb(var(--accent)/0.12)", color: "rgb(var(--accent))" }}>
+                    {f}
+                  </span>
+                ))
+              : <span className="text-token-xs text-muted">Not available</span>}
+          </div>
+        </div>
       </div>
 
       <div className="glass p-card">
