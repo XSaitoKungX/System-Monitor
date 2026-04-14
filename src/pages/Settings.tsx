@@ -500,7 +500,7 @@ function AboutTab() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium"
                 style={{ background: "rgb(var(--accent)/0.15)", color: "rgb(var(--accent))" }}>
-                v0.2.1
+                v0.2.2
               </span>
               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium"
                 style={{ background: "rgb(var(--success)/0.12)", color: "rgb(var(--success))" }}>

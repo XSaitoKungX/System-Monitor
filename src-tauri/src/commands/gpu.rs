@@ -26,7 +26,7 @@ pub fn get_gpu_stats() -> GpuStats {
     #[cfg(feature = "nvidia")]
     let mut nvml_gpus: Vec<GpuInfo> = Vec::new();
     #[cfg(feature = "nvidia")]
-    let nvml_available = nvml_wrapper::NVML::init().is_ok();
+    let nvml_available = nvml_wrapper::Nvml::init().is_ok();
     #[cfg(feature = "nvidia")]
     let nvml_err = if !nvml_available {
         Some("NVML not available (NVIDIA driver not installed?)".to_string())
@@ -40,8 +40,9 @@ pub fn get_gpu_stats() -> GpuStats {
 
     #[cfg(feature = "nvidia")]
     if nvml_available {
-        if let Ok(nvml) = nvml_wrapper::NVML::init() {
-            if let Ok(count) = nvml.device_count() {
+        if let Ok(nvml) = nvml_wrapper::Nvml::init() {
+            let count_result: nvml_wrapper::error::NvmlResult<u32> = nvml.device_count();
+            if let Ok(count) = count_result {
                 for i in 0..count {
                     if let Ok(device) = nvml.device_by_index(i) {
                         let name = device.name().unwrap_or_else(|_| format!("NVIDIA GPU {}", i));
