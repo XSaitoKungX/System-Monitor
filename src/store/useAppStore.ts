@@ -8,12 +8,18 @@ interface AppState {
   sidebarCollapsed: boolean;
   refreshInterval: number;
   alerts: AlertConfig[];
+  compactMode: boolean;
+  startMinimized: boolean;
+  closeToTray: boolean;
   setTheme: (theme: Theme) => void;
   setCurrentPage: (page: NavPage) => void;
   setSidebarCollapsed: (v: boolean) => void;
   setRefreshInterval: (ms: number) => void;
   addAlert: (alert: AlertConfig) => void;
   removeAlert: (id: string) => void;
+  setCompactMode: (v: boolean) => void;
+  setStartMinimized: (v: boolean) => void;
+  setCloseToTray: (v: boolean) => void;
 }
 
 export interface AlertConfig {
@@ -32,6 +38,9 @@ export const useAppStore = create<AppState>()(
       sidebarCollapsed: false,
       refreshInterval: 3000,
       alerts: [],
+      compactMode: false,
+      startMinimized: false,
+      closeToTray: true,
       setTheme: (theme) => {
         document.documentElement.setAttribute("data-theme", theme);
         set({ theme });
@@ -41,6 +50,12 @@ export const useAppStore = create<AppState>()(
       setRefreshInterval: (ms) => set({ refreshInterval: ms }),
       addAlert: (alert) => set((s) => ({ alerts: [...s.alerts, alert] })),
       removeAlert: (id) => set((s) => ({ alerts: s.alerts.filter((a) => a.id !== id) })),
+      setCompactMode: (v) => {
+        document.documentElement.setAttribute("data-compact", v ? "true" : "false");
+        set({ compactMode: v });
+      },
+      setStartMinimized: (v) => set({ startMinimized: v }),
+      setCloseToTray: (v) => set({ closeToTray: v }),
     }),
     {
       name: "system-monitor-settings",
@@ -49,6 +64,9 @@ export const useAppStore = create<AppState>()(
         sidebarCollapsed: s.sidebarCollapsed,
         refreshInterval: s.refreshInterval,
         alerts: s.alerts,
+        compactMode: s.compactMode,
+        startMinimized: s.startMinimized,
+        closeToTray: s.closeToTray,
       }),
     }
   )

@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useProcesses } from "@/hooks/useSystemStats";
 import { formatBytes, getUsageClass } from "@/lib/utils";
 import { Search, RefreshCw, XCircle, ChevronUp, ChevronDown } from "lucide-react";
+import { clsx } from "clsx";
 
 type SortKey = "cpu_usage" | "memory_bytes" | "name" | "pid";
 type SortDir = "asc" | "desc";
@@ -49,14 +50,14 @@ export function Processes() {
     }
   }
 
-  const thCls = "text-left text-xs text-muted font-medium px-3 py-2 cursor-pointer select-none hover:text-secondary transition-colors";
+  const thCls = "text-left text-token-xs text-muted font-medium px-3 py-2 cursor-pointer select-none hover:text-secondary transition-colors";
 
   return (
-    <div className="space-y-3 h-full flex flex-col">
+    <div className="h-full flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-primary">Processes</h1>
+        <h1 className="text-token-xl font-bold text-primary">Processes</h1>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted">{filtered.length} / {data.length}</span>
+          <span className="text-token-xs text-muted">{filtered.length} / {data.length}</span>
           <button
             onClick={refresh}
             disabled={loading}
@@ -73,12 +74,12 @@ export function Processes() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name or PID..."
-          className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-default bg-[rgb(var(--bg-secondary))] text-primary placeholder:text-muted focus:outline-none focus:border-[rgb(var(--accent))] transition-colors"
+          className="w-full pl-8 pr-3 py-2 text-token-sm rounded-lg border border-default bg-[rgb(var(--bg-secondary))] text-primary placeholder:text-muted focus:outline-none focus:border-[rgb(var(--accent))] transition-colors"
         />
       </div>
 
       <div className="glass flex-1 overflow-hidden flex flex-col">
-        <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
+        <table className="w-full" style={{ tableLayout: "fixed" }}>
           <thead className="border-b border-default">
             <tr>
               <th className={thCls} style={{ width: 60 }} onClick={() => toggleSort("pid")}>
@@ -91,7 +92,7 @@ export function Processes() {
                 <span className="flex items-center gap-1">CPU% <SortIcon k="cpu_usage" /></span>
               </th>
               <th className={thCls} style={{ width: 100 }} onClick={() => toggleSort("memory_bytes")}>
-                <span className="flex items-center gap-1">Memory <SortIcon k="memory_bytes" /></span>
+                <span className="flex items-center gap-1">Mem <SortIcon k="memory_bytes" /></span>
               </th>
               <th className={thCls} style={{ width: 80 }}>Status</th>
               <th className={thCls} style={{ width: 60 }}>Kill</th>
@@ -99,29 +100,27 @@ export function Processes() {
           </thead>
         </table>
         <div className="overflow-y-auto flex-1">
-          <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
+          <table className="w-full text-token-sm" style={{ tableLayout: "fixed" }}>
             <tbody>
               {filtered.map((p) => (
                 <tr
                   key={p.pid}
                   className="border-b border-[rgb(var(--border)/0.3)] hover:bg-[rgb(var(--bg-hover))] transition-colors"
                 >
-                  <td className="px-3 py-1.5 text-muted font-mono" style={{ width: 60 }}>{p.pid}</td>
-                  <td className="px-3 py-1.5 text-primary truncate">{p.name}</td>
-                  <td className={`px-3 py-1.5 font-medium ${getUsageClass(p.cpu_usage)}`} style={{ width: 90 }}>
+                  <td className="text-muted font-mono px-3 py-1.5" style={{ width: 60 }}>{p.pid}</td>
+                  <td className="text-primary truncate px-3 py-1.5">{p.name}</td>
+                  <td className={clsx("font-medium px-3 py-1.5", getUsageClass(p.cpu_usage))} style={{ width: 90 }}>
                     {p.cpu_usage.toFixed(1)}%
                   </td>
-                  <td className="px-3 py-1.5 text-secondary" style={{ width: 100 }}>
+                  <td className="text-secondary px-3 py-1.5" style={{ width: 100 }}>
                     {formatBytes(p.memory_bytes)}
                   </td>
-                  <td className="px-3 py-1.5 text-muted text-xs truncate" style={{ width: 80 }}>{p.status}</td>
+                  <td className="text-token-xs text-muted truncate px-3 py-1.5" style={{ width: 80 }}>{p.status}</td>
                   <td className="px-3 py-1.5" style={{ width: 60 }}>
                     <button
                       onClick={() => handleKill(p.pid)}
                       className="p-1 rounded transition-colors"
-                      style={{
-                        color: confirmKill === p.pid ? "rgb(var(--danger))" : "rgb(var(--text-muted))",
-                      }}
+                      style={{ color: confirmKill === p.pid ? "rgb(var(--danger))" : "rgb(var(--text-muted))" }}
                       title={confirmKill === p.pid ? "Click again to confirm" : "Kill process"}
                     >
                       <XCircle size={14} />

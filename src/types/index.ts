@@ -102,7 +102,7 @@ export interface SystemInfo {
   cpu_arch: string;
 }
 
-export type Theme = "default" | "dark" | "light" | "space" | "dev";
+export type Theme = "default" | "dark" | "light" | "space" | "dev" | "midnight" | "rose" | "nord";
 
 export type NavPage =
   | "dashboard"

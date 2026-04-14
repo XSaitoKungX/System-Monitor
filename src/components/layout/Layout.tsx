@@ -11,7 +11,7 @@ export function Layout({ children }: LayoutProps) {
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Topbar />
-        <main className="flex-1 overflow-y-auto p-4">
+        <main className="flex-1 overflow-y-auto" style={{ padding: "var(--p-card)" }}>
           {children}
         </main>
       </div>

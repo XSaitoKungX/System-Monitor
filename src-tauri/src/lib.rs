@@ -11,7 +11,33 @@ use commands::gpu::get_gpu_stats;
 use commands::system::get_system_info;
 use commands::webview::open_speedtest;
 
-use tauri::Manager;
+use tauri::{Manager, Emitter};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct WindowBehavior {
+    close_to_tray: bool,
+}
+
+#[tauri::command]
+fn update_window_behavior(app: tauri::AppHandle, behavior: WindowBehavior) {
+    app.manage(behavior);
+}
+
+#[tauri::command]
+fn hide_window(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
+    }
+}
+
+#[tauri::command]
+fn show_window(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,6 +50,16 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // Check if we should start minimized (read from store file)
+            let app_path = app.path().app_local_data_dir().ok();
+            let start_minimized = app_path.and_then(|p| {
+                let store_path = p.join("system-monitor-settings.json");
+                let content = std::fs::read_to_string(store_path).ok()?;
+                let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+                json.get("state")
+                    .and_then(|s| s.get("startMinimized").and_then(|v| v.as_bool()))
+            }).unwrap_or(false);
+
             // Build tray menu
             let show_i = tauri::menu::MenuItemBuilder::with_id("show", "Show Window")
                 .build(app)?;
@@ -65,14 +101,33 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // Start minimized if requested
+            if start_minimized {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.hide();
+                }
+            }
+
+            // Emit event that frontend can use to send window behavior
+            let _ = app.emit("window-ready", ());
+
             Ok(())
         })
-        // Closing the main window hides it to tray rather than quitting
+        // Closing the main window behavior depends on closeToTray setting
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
-                    let _ = window.hide();
-                    api.prevent_close();
+                    // Check if closeToTray is enabled (default true)
+                    let app_handle = window.app_handle();
+                    let close_to_tray = app_handle.try_state::<WindowBehavior>()
+                        .map(|b| b.close_to_tray)
+                        .unwrap_or(true);
+
+                    if close_to_tray {
+                        let _ = window.hide();
+                        api.prevent_close();
+                    }
+                    // else: allow close (quit)
                 }
             }
         })
@@ -86,6 +141,9 @@ pub fn run() {
             kill_process,
             get_system_info,
             open_speedtest,
+            update_window_behavior,
+            hide_window,
+            show_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running system monitor");

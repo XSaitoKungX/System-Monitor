@@ -21,25 +21,140 @@ pub fn get_gpu_stats() -> GpuStats {
         #[serde(rename = "PNPDeviceID")]
         pnp_device_id: Option<String>,
     }
-    
+
+    // ── Try NVML first for NVIDIA GPUs (gives real stats) ──
+    #[cfg(feature = "nvidia")]
+    let mut nvml_gpus: Vec<GpuInfo> = Vec::new();
+    #[cfg(feature = "nvidia")]
+    let nvml_available = nvml_wrapper::NVML::init().is_ok();
+    #[cfg(feature = "nvidia")]
+    let nvml_err = if !nvml_available {
+        Some("NVML not available (NVIDIA driver not installed?)".to_string())
+    } else {
+        None
+    };
+    #[cfg(not(feature = "nvidia"))]
+    let nvml_available = false;
+    #[cfg(not(feature = "nvidia"))]
+    let nvml_err: Option<String> = Some("NVIDIA support not compiled in (enable 'nvidia' feature)".to_string());
+
+    #[cfg(feature = "nvidia")]
+    if nvml_available {
+        if let Ok(nvml) = nvml_wrapper::NVML::init() {
+            if let Ok(count) = nvml.device_count() {
+                for i in 0..count {
+                    if let Ok(device) = nvml.device_by_index(i) {
+                        let name = device.name().unwrap_or_else(|_| format!("NVIDIA GPU {}", i));
+                        let uuid = device.uuid().ok();
+
+                        // Memory info
+                        let (vram_total, vram_used, vram_pct) = device.memory_info()
+                            .map(|m| {
+                                let total = m.total;
+                                let used = m.used;
+                                let pct = if total > 0 { (used as f64 / total as f64 * 100.0) as f32 } else { 0.0 };
+                                (total, used, pct)
+                            })
+                            .unwrap_or((0, 0, 0.0));
+
+                        // Utilization
+                        let gpu_usage = device.utilization_rates()
+                            .map(|u| u.gpu as f32)
+                            .unwrap_or(0.0);
+
+                        // Temperature
+                        let temperature = device.temperature(nvml_wrapper::enum_wrappers::device::TemperatureSensor::Gpu)
+                            .ok()
+                            .map(|t| t as f32);
+
+                        // Power
+                        let power_watts = device.power_usage()
+                            .ok()
+                            .map(|p| p as f32 / 1000.0);
+
+                        // Clocks
+                        let freq_mhz = device.clock_info(nvml_wrapper::enum_wrappers::device::Clock::Graphics)
+                            .ok()
+                            .map(|c| c);
+                        let max_freq_mhz = device.max_clock_info(nvml_wrapper::enum_wrappers::device::Clock::Graphics)
+                            .ok()
+                            .map(|c| c);
+
+                        nvml_gpus.push(GpuInfo {
+                            index: i as usize,
+                            name: name.to_string(),
+                            vendor: "NVIDIA".to_string(),
+                            driver: device.nvml().sys_driver_version().unwrap_or_default().to_string(),
+                            vram_total_bytes: vram_total,
+                            vram_used_bytes: vram_used,
+                            vram_usage_percent: vram_pct,
+                            gpu_usage_percent: gpu_usage,
+                            temperature,
+                            power_watts,
+                            freq_mhz,
+                            max_freq_mhz,
+                            card_path: uuid.unwrap_or_default().to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "nvidia")]
+    if !nvml_gpus.is_empty() {
+        return GpuStats {
+            gpus: nvml_gpus,
+            platform_note: None,
+        };
+    }
+
+    // ── WMI Fallback for AMD/Intel/Other ──
     let com = match COMLibrary::without_security() {
         Ok(c) => c,
-        Err(e) => return GpuStats {
-            gpus: vec![],
-            platform_note: Some(format!("WMI COM init failed: {e}")),
-        },
+        Err(e) => {
+            let note = format!("WMI COM init failed: {e}. ");
+            #[cfg(feature = "nvidia")]
+            let note = format!("{}NVML: {}", note, nvml_err.as_deref().unwrap_or("NVIDIA GPUs not found"));
+            #[cfg(not(feature = "nvidia"))]
+            let note = format!("{}NVML not compiled in.", note);
+            return GpuStats {
+                gpus: vec![],
+                platform_note: Some(note),
+            };
+        }
     };
+
     let wmi = match WMIConnection::new(com.into()) {
         Ok(w) => w,
-        Err(e) => return GpuStats {
-            gpus: vec![],
-            platform_note: Some(format!("WMI connection failed: {e}")),
-        },
+        Err(e) => {
+            let note = format!("WMI connection failed: {e}. ");
+            #[cfg(feature = "nvidia")]
+            let note = format!("{}NVML: {}", note, nvml_err.as_deref().unwrap_or("NVIDIA GPUs not found"));
+            #[cfg(not(feature = "nvidia"))]
+            let note = format!("{}NVML not compiled in.", note);
+            return GpuStats {
+                gpus: vec![],
+                platform_note: Some(note),
+            };
+        }
     };
 
     let controllers: Vec<VideoController> = wmi
         .raw_query("SELECT Name, DriverVersion, AdapterRAM, PNPDeviceID FROM Win32_VideoController")
         .unwrap_or_default();
+
+    if controllers.is_empty() {
+        let note = "No GPUs detected via WMI. ".to_string();
+        #[cfg(feature = "nvidia")]
+        let note = format!("{}NVML: {}", note, nvml_err.as_deref().unwrap_or("NVIDIA GPUs not found"));
+        #[cfg(not(feature = "nvidia"))]
+        let note = format!("{}NVML not compiled in.", note);
+        return GpuStats {
+            gpus: vec![],
+            platform_note: Some(note),
+        };
+    }
 
     let components = sysinfo::Components::new_with_refreshed_list();
 
@@ -88,7 +203,13 @@ pub fn get_gpu_stats() -> GpuStats {
         })
         .collect();
 
-    GpuStats { gpus, platform_note: None }
+    let note = if gpus.is_empty() {
+        Some("No physical GPUs detected. Virtual GPUs filtered out.".to_string())
+    } else {
+        None
+    };
+
+    GpuStats { gpus, platform_note: note }
 }
 
 // ── macOS / other ─────────────────────────────────────────────────────────────

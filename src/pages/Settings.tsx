@@ -1,24 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
+import { relaunch, exit } from "@tauri-apps/plugin-process";
+import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "@/store/useAppStore";
 import type { Theme } from "@/types";
 import {
   GitBranch, Globe, Bug, Sparkles, Shield, Lock, RefreshCw,
   Code2, ExternalLink, Cpu, Zap, Package, Download, CheckCircle, AlertCircle,
+  Monitor, Layers, Bell, Trash2, PowerOff,
 } from "lucide-react";
 import appIcon from "/icon.png";
 import saitoIcon from "/saito-icon.png";
 
 type Tab = "settings" | "about";
+type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "uptodate" | "error";
 
 const THEMES: { value: Theme; label: string; desc: string; dot: string }[] = [
-  { value: "default", label: "Default", desc: "Dark blue-grey", dot: "#5b8dee" },
-  { value: "dark",    label: "Dark",    desc: "Pure dark",      dot: "#888" },
-  { value: "light",   label: "Light",   desc: "Clean light",    dot: "#333" },
-  { value: "space",   label: "Space",   desc: "Deep space",     dot: "#9d7ee8" },
-  { value: "dev",     label: "Dev",     desc: "Terminal green", dot: "#39ff14" },
+  { value: "default",  label: "Default",   desc: "Dark blue-grey",  dot: "#6366f1" },
+  { value: "dark",     label: "Dark",      desc: "Pure dark",        dot: "#555" },
+  { value: "light",    label: "Light",     desc: "Clean light",      dot: "#bbc" },
+  { value: "space",    label: "Space",     desc: "Deep space",       dot: "#8b5cf6" },
+  { value: "dev",      label: "Dev",       desc: "Terminal green",   dot: "#22c55e" },
+  { value: "midnight", label: "Midnight", desc: "Deep ocean blue",  dot: "#38bdf8" },
+  { value: "rose",     label: "Rose",     desc: "Dark rose red",    dot: "#f43f5e" },
+  { value: "nord",     label: "Nord",     desc: "Arctic palette",   dot: "#81a1c1" },
 ];
 
 const INTERVALS = [
@@ -65,10 +71,78 @@ const PRIVACY_ITEMS = [
 ];
 
 const TECH_STACK = [
-  { icon: Package, label: "Tauri v2",   desc: "Desktop runtime" },
-  { icon: Cpu,     label: "Rust + sysinfo", desc: "Backend & system access" },
-  { icon: Zap,     label: "React 18 + TS", desc: "Frontend framework" },
+  { icon: Package, label: "Tauri v2",        desc: "Desktop runtime" },
+  { icon: Cpu,     label: "Rust + sysinfo",  desc: "Backend & system access" },
+  { icon: Zap,     label: "React 18 + TS",   desc: "Frontend framework" },
 ];
+
+const ALERT_METRICS: { key: "cpu" | "memory" | "disk" | "network"; label: string; unit: string; default: number }[] = [
+  { key: "cpu",     label: "CPU Usage",    unit: "%",    default: 90 },
+  { key: "memory",  label: "Memory Usage", unit: "%",    default: 85 },
+  { key: "disk",    label: "Disk Usage",   unit: "%",    default: 90 },
+  { key: "network", label: "Net Rx/s",     unit: "MB/s", default: 50 },
+];
+
+function AlertThresholds() {
+  const { alerts, addAlert, removeAlert } = useAppStore();
+
+  const getAlert = (key: typeof ALERT_METRICS[0]["key"]) =>
+    alerts.find((a) => a.metric === key);
+
+  const toggle = (m: typeof ALERT_METRICS[0]) => {
+    const existing = getAlert(m.key);
+    if (existing) {
+      removeAlert(existing.id);
+    } else {
+      addAlert({
+        id: `${m.key}-${Date.now()}`,
+        metric: m.key,
+        threshold: m.default,
+        label: m.label,
+        enabled: true,
+      });
+    }
+  };
+
+  const setThreshold = (id: string, value: number) => {
+    const { alerts: cur } = useAppStore.getState();
+    const updated = cur.map((a) => (a.id === id ? { ...a, threshold: value } : a));
+    useAppStore.setState({ alerts: updated });
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted">Enable alerts to get notified when a metric exceeds its threshold.</p>
+      {ALERT_METRICS.map((m) => {
+        const alert = getAlert(m.key);
+        return (
+          <div key={m.key} className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-primary">{m.label}</span>
+              <Toggle value={!!alert} onChange={() => toggle(m)} label="" />
+            </div>
+            {alert && (
+              <div className="flex items-center gap-3 pl-1">
+                <input
+                  type="range"
+                  min={10}
+                  max={m.key === "network" ? 1000 : 100}
+                  step={m.key === "network" ? 10 : 5}
+                  value={alert.threshold}
+                  onChange={(e) => setThreshold(alert.id, Number(e.target.value))}
+                  className="flex-1 accent-[rgb(var(--accent))]"
+                />
+                <span className="text-xs font-mono text-muted w-16 text-right shrink-0">
+                  {alert.threshold} {m.unit}
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function LinkRow({ icon: Icon, label, description, href }: typeof LINKS[0]) {
   return (
@@ -91,14 +165,32 @@ function LinkRow({ icon: Icon, label, description, href }: typeof LINKS[0]) {
 }
 
 function SettingsTab() {
-  const { theme, setTheme, refreshInterval, setRefreshInterval } = useAppStore();
+  const {
+    theme, setTheme,
+    refreshInterval, setRefreshInterval,
+    compactMode, setCompactMode,
+    startMinimized, setStartMinimized,
+    closeToTray, setCloseToTray,
+  } = useAppStore();
+
+  // Sync window behavior with Rust when it changes
+  useEffect(() => {
+    invoke("update_window_behavior", {
+      behavior: {
+        close_to_tray: closeToTray,
+      },
+    }).catch(() => {});
+  }, [closeToTray]);
 
   return (
     <div className="space-y-5">
       {/* Theme */}
       <div className="glass p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-primary">Appearance</h2>
-        <div className="grid grid-cols-5 gap-2">
+        <div className="flex items-center gap-2">
+          <Monitor size={14} style={{ color: "rgb(var(--accent))" }} />
+          <h2 className="text-sm font-semibold text-primary">Appearance</h2>
+        </div>
+        <div className="grid grid-cols-4 gap-2">
           {THEMES.map((t) => (
             <button
               key={t.value}
@@ -112,17 +204,28 @@ function SettingsTab() {
               <span className="w-4 h-4 rounded-full border-2 border-white/20 shrink-0"
                 style={{ background: t.dot }} />
               <span className="text-xs font-medium text-primary leading-tight">{t.label}</span>
-              <span className="text-xs text-muted leading-tight text-center">{t.desc}</span>
+              <span className="text-[10px] text-muted leading-tight text-center">{t.desc}</span>
             </button>
           ))}
+        </div>
+        <div className="pt-2 border-t" style={{ borderColor: "rgb(var(--border)/0.3)" }}>
+          <Toggle
+            value={compactMode}
+            onChange={setCompactMode}
+            label="Compact Mode"
+            description="Reduce padding and font sizes for more data density"
+          />
         </div>
       </div>
 
       {/* Refresh interval */}
       <div className="glass p-5 space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold text-primary">Refresh Interval</h2>
-          <p className="text-xs text-muted mt-0.5">How often stats are fetched from the backend. Lower = more CPU.</p>
+        <div className="flex items-center gap-2">
+          <RefreshCw size={14} style={{ color: "rgb(var(--accent))" }} />
+          <div>
+            <h2 className="text-sm font-semibold text-primary">Refresh Interval</h2>
+            <p className="text-xs text-muted mt-0.5">How often stats are fetched from the backend. Lower = more CPU.</p>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           {INTERVALS.map((iv) => (
@@ -142,27 +245,68 @@ function SettingsTab() {
         </div>
       </div>
 
-      {/* Tech stack */}
+      {/* Window behaviour */}
       <div className="glass p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-primary">Tech Stack</h2>
-        <div className="grid grid-cols-3 gap-3">
-          {TECH_STACK.map(({ icon: Icon, label, desc }) => (
-            <div key={label} className="flex flex-col gap-1.5 p-3 rounded-lg"
-              style={{ background: "rgb(var(--bg-secondary))" }}>
-              <Icon size={15} style={{ color: "rgb(var(--accent))" }} />
-              <p className="text-xs font-semibold text-primary">{label}</p>
-              <p className="text-xs text-muted">{desc}</p>
-            </div>
-          ))}
+        <div className="flex items-center gap-2">
+          <Layers size={14} style={{ color: "rgb(var(--accent))" }} />
+          <h2 className="text-sm font-semibold text-primary">Window Behaviour</h2>
+        </div>
+        <div className="space-y-4">
+          <Toggle
+            value={startMinimized}
+            onChange={setStartMinimized}
+            label="Start minimized"
+            description="Launch directly to system tray without showing the window"
+          />
+          <Toggle
+            value={closeToTray}
+            onChange={setCloseToTray}
+            label="Close to tray"
+            description="Clicking × minimizes to tray instead of quitting"
+          />
         </div>
       </div>
+
+      {/* Alerts */}
+      <div className="glass p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <Bell size={14} style={{ color: "rgb(var(--accent))" }} />
+          <h2 className="text-sm font-semibold text-primary">Alert Thresholds</h2>
+        </div>
+        <AlertThresholds />
+      </div>
+
+      {/* Updates */}
+      <UpdateSection />
+
+      {/* Danger */}
+      <DangerSection />
     </div>
   );
 }
 
-type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "uptodate" | "error";
+function Toggle({ value, onChange, label, description }: { value: boolean; onChange: (v: boolean) => void; label: string; description?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium text-primary">{label}</p>
+        {description && <p className="text-xs text-muted mt-0.5">{description}</p>}
+      </div>
+      <button
+        onClick={() => onChange(!value)}
+        className="relative w-10 h-5.5 rounded-full transition-colors shrink-0"
+        style={{ background: value ? "rgb(var(--accent))" : "rgb(var(--bg-hover))" }}
+      >
+        <span
+          className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+          style={{ transform: value ? "translateX(18px)" : "translateX(0)" }}
+        />
+      </button>
+    </div>
+  );
+}
 
-function AboutTab() {
+function UpdateSection() {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -210,6 +354,136 @@ function AboutTab() {
   };
 
   return (
+    <div className="glass p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <RefreshCw size={14} style={{ color: "rgb(var(--accent))" }} />
+          <h2 className="text-sm font-semibold text-primary">Updates</h2>
+        </div>
+        {updateStatus === "idle" && (
+          <button
+            onClick={handleCheckUpdate}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+            style={{ borderColor: "rgb(var(--accent)/0.4)", color: "rgb(var(--accent))", background: "rgb(var(--accent)/0.08)" }}
+          >
+            Check for Updates
+          </button>
+        )}
+        {updateStatus === "checking" && (
+          <span className="text-xs text-muted flex items-center gap-1.5">
+            <RefreshCw size={12} className="animate-spin" /> Checking…
+          </span>
+        )}
+        {updateStatus === "uptodate" && (
+          <span className="text-xs flex items-center gap-1.5" style={{ color: "rgb(var(--success))" }}>
+            <CheckCircle size={12} /> Up to date
+          </span>
+        )}
+        {updateStatus === "error" && (
+          <span className="text-xs flex items-center gap-1.5" style={{ color: "rgb(var(--danger))" }}>
+            <AlertCircle size={12} /> Error
+          </span>
+        )}
+      </div>
+      {updateStatus === "available" && updateVersion && (
+        <div className="rounded-lg p-3 flex items-center justify-between gap-3"
+          style={{ background: "rgb(var(--accent)/0.08)", border: "1px solid rgb(var(--accent)/0.2)" }}>
+          <div>
+            <p className="text-sm font-medium text-primary">v{updateVersion} available</p>
+            <p className="text-xs text-muted">A new version is ready to install</p>
+          </div>
+          <button
+            onClick={handleInstallUpdate}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shrink-0"
+            style={{ background: "rgb(var(--accent))", color: "rgb(var(--accent-fg))" }}
+          >
+            <Download size={12} /> Install
+          </button>
+        </div>
+      )}
+      {updateStatus === "downloading" && (
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs text-muted">
+            <span>Downloading update…</span>
+            <span>{updateProgress}%</span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgb(var(--bg-hover))" }}>
+            <div className="h-full rounded-full transition-all" style={{ width: `${updateProgress}%`, background: "rgb(var(--accent))" }} />
+          </div>
+        </div>
+      )}
+      {updateStatus === "error" && updateError && (
+        <p className="text-xs" style={{ color: "rgb(var(--danger))" }}>{updateError}</p>
+      )}
+    </div>
+  );
+}
+
+function DangerSection() {
+  const [confirmQuit, setConfirmQuit] = useState(false);
+
+  return (
+    <div className="glass p-5 space-y-3" style={{ borderColor: "rgb(var(--danger)/0.25)" }}>
+      <div className="flex items-center gap-2 mb-1">
+        <Trash2 size={14} style={{ color: "rgb(var(--danger))" }} />
+        <h2 className="text-sm font-semibold" style={{ color: "rgb(var(--danger))" }}>Danger Zone</h2>
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-primary">Reset all settings</p>
+          <p className="text-xs text-muted">Clears theme, interval and all preferences. App will restart.</p>
+        </div>
+        <button
+          onClick={() => {
+            localStorage.removeItem("system-monitor-settings");
+            relaunch();
+          }}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium border shrink-0 transition-all"
+          style={{ borderColor: "rgb(var(--danger)/0.4)", color: "rgb(var(--danger))", background: "rgb(var(--danger)/0.08)" }}
+        >
+          Reset
+        </button>
+      </div>
+      <div className="border-t pt-3" style={{ borderColor: "rgb(var(--border)/0.3)" }}>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-primary">Quit application</p>
+            <p className="text-xs text-muted">Completely exit System Monitor (also from tray).</p>
+          </div>
+          {!confirmQuit ? (
+            <button
+              onClick={() => setConfirmQuit(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border shrink-0 transition-all"
+              style={{ borderColor: "rgb(var(--danger)/0.4)", color: "rgb(var(--danger))", background: "rgb(var(--danger)/0.08)" }}
+            >
+              <PowerOff size={12} /> Quit
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmQuit(false)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                style={{ borderColor: "rgb(var(--border)/0.5)", color: "rgb(var(--text-secondary))" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => exit(0)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 transition-all"
+                style={{ background: "rgb(var(--danger))", color: "#fff" }}
+              >
+                Confirm Quit
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AboutTab() {
+  return (
     <div className="space-y-5">
       {/* Hero */}
       <div className="glass p-6 overflow-hidden relative">
@@ -226,7 +500,7 @@ function AboutTab() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium"
                 style={{ background: "rgb(var(--accent)/0.15)", color: "rgb(var(--accent))" }}>
-                v0.2.0
+                v0.2.1
               </span>
               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium"
                 style={{ background: "rgb(var(--success)/0.12)", color: "rgb(var(--success))" }}>
@@ -265,68 +539,19 @@ function AboutTab() {
         </div>
       </div>
 
-      {/* Updates */}
+      {/* Tech Stack */}
       <div className="glass p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <RefreshCw size={14} style={{ color: "rgb(var(--accent))" }} />
-            <h2 className="text-sm font-semibold text-primary">Updates</h2>
-          </div>
-          {updateStatus === "idle" && (
-            <button
-              onClick={handleCheckUpdate}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
-              style={{ borderColor: "rgb(var(--accent)/0.4)", color: "rgb(var(--accent))", background: "rgb(var(--accent)/0.08)" }}
-            >
-              Check for Updates
-            </button>
-          )}
-          {updateStatus === "checking" && (
-            <span className="text-xs text-muted flex items-center gap-1.5">
-              <RefreshCw size={12} className="animate-spin" /> Checking…
-            </span>
-          )}
-          {updateStatus === "uptodate" && (
-            <span className="text-xs flex items-center gap-1.5" style={{ color: "rgb(var(--success))" }}>
-              <CheckCircle size={12} /> Up to date
-            </span>
-          )}
-          {updateStatus === "error" && (
-            <span className="text-xs flex items-center gap-1.5" style={{ color: "rgb(var(--danger))" }}>
-              <AlertCircle size={12} /> Error
-            </span>
-          )}
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted">Tech Stack</p>
+        <div className="grid grid-cols-3 gap-3">
+          {TECH_STACK.map(({ icon: Icon, label, desc }) => (
+            <div key={label} className="flex flex-col gap-1.5 p-3 rounded-lg"
+              style={{ background: "rgb(var(--bg-secondary))" }}>
+              <Icon size={15} style={{ color: "rgb(var(--accent))" }} />
+              <p className="text-xs font-semibold text-primary">{label}</p>
+              <p className="text-xs text-muted">{desc}</p>
+            </div>
+          ))}
         </div>
-        {updateStatus === "available" && updateVersion && (
-          <div className="rounded-lg p-3 flex items-center justify-between gap-3"
-            style={{ background: "rgb(var(--accent)/0.08)", border: "1px solid rgb(var(--accent)/0.2)" }}>
-            <div>
-              <p className="text-sm font-medium text-primary">v{updateVersion} available</p>
-              <p className="text-xs text-muted">A new version is ready to install</p>
-            </div>
-            <button
-              onClick={handleInstallUpdate}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shrink-0"
-              style={{ background: "rgb(var(--accent))", color: "#fff" }}
-            >
-              <Download size={12} /> Install
-            </button>
-          </div>
-        )}
-        {updateStatus === "downloading" && (
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-muted">
-              <span>Downloading update…</span>
-              <span>{updateProgress}%</span>
-            </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgb(var(--bg-hover))" }}>
-              <div className="h-full rounded-full transition-all" style={{ width: `${updateProgress}%`, background: "rgb(var(--accent))" }} />
-            </div>
-          </div>
-        )}
-        {updateStatus === "error" && updateError && (
-          <p className="text-xs" style={{ color: "rgb(var(--danger))" }}>{updateError}</p>
-        )}
       </div>
 
       {/* Links */}

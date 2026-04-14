@@ -1,6 +1,6 @@
 [package]
 name = "system-monitor"
-version = "0.2.0"
+version = "0.2.1"
 description = "Modern system monitor — open source replacement for Task Manager, htop and btop"
 authors = ["XSaitoKungX"]
 edition = "2021"
@@ -32,7 +32,7 @@ nvml-wrapper = { version = "0.10", optional = true }
 wmi = "0.13"
 
 [features]
-default = []
+default = ["nvidia"]
 nvidia = ["nvml-wrapper"]
 
 [profile.release]
