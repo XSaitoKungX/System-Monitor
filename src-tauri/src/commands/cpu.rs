@@ -32,17 +32,14 @@ pub fn get_cpu_stats(state: State<SysState>) -> CpuStats {
             .and_then(|c| c.temperature())
     };
 
-    // ── raw-cpuid: cache sizes, architecture, feature flags ──────────────────
-    let cpuid = raw_cpuid::CpuId::new();
-
     let architecture = std::env::consts::ARCH.to_string();
 
-    let (cache_l1_kb, cache_l2_kb, cache_l3_kb) = cpuid
-        .get_cache_parameters()
-        .map(|mut params| {
-            let mut l1: Option<u32> = None;
-            let mut l2: Option<u32> = None;
-            let mut l3: Option<u32> = None;
+    // ── raw-cpuid: cache sizes + feature flags (x86/x86_64 only) ─────────────
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    let (cache_l1_kb, cache_l2_kb, cache_l3_kb, features) = {
+        let cpuid = raw_cpuid::CpuId::new();
+        let (mut l1, mut l2, mut l3) = (None::<u32>, None::<u32>, None::<u32>);
+        if let Some(mut params) = cpuid.get_cache_parameters() {
             while let Some(p) = params.next() {
                 use raw_cpuid::CacheType;
                 if p.cache_type() == CacheType::Null { break; }
@@ -54,23 +51,26 @@ pub fn get_cpu_stats(state: State<SysState>) -> CpuStats {
                     _ => {}
                 }
             }
-            (l1, l2, l3)
-        })
-        .unwrap_or((None, None, None));
+        }
+        let feats: Vec<String> = cpuid.get_feature_info().map(|f| {
+            let mut v = Vec::new();
+            if f.has_avx()   { v.push("AVX".to_string()); }
+            if f.has_sse()   { v.push("SSE".to_string()); }
+            if f.has_sse2()  { v.push("SSE2".to_string()); }
+            if f.has_sse3()  { v.push("SSE3".to_string()); }
+            if f.has_sse41() { v.push("SSE4.1".to_string()); }
+            if f.has_sse42() { v.push("SSE4.2".to_string()); }
+            if f.has_fma()   { v.push("FMA".to_string()); }
+            if f.has_aesni() { v.push("AES-NI".to_string()); }
+            if f.has_movbe() { v.push("MOVBE".to_string()); }
+            v
+        }).unwrap_or_default();
+        (l1, l2, l3, feats)
+    };
 
-    let features: Vec<String> = cpuid.get_feature_info().map(|f| {
-        let mut feats = Vec::new();
-        if f.has_avx()   { feats.push("AVX".to_string()); }
-        if f.has_sse()   { feats.push("SSE".to_string()); }
-        if f.has_sse2()  { feats.push("SSE2".to_string()); }
-        if f.has_sse3()  { feats.push("SSE3".to_string()); }
-        if f.has_sse41() { feats.push("SSE4.1".to_string()); }
-        if f.has_sse42() { feats.push("SSE4.2".to_string()); }
-        if f.has_fma()   { feats.push("FMA".to_string()); }
-        if f.has_aesni() { feats.push("AES-NI".to_string()); }
-        if f.has_movbe() { feats.push("MOVBE".to_string()); }
-        feats
-    }).unwrap_or_default();
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    let (cache_l1_kb, cache_l2_kb, cache_l3_kb, features) =
+        (None::<u32>, None::<u32>, None::<u32>, Vec::<String>::new());
 
     CpuStats {
         usage_total,

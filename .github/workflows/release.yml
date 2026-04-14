@@ -12,7 +12,28 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  release:
+  create-release:
+    runs-on: ubuntu-24.04
+    outputs:
+      release_id: ${{ steps.create-release.outputs.releaseId }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        id: create-release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "System Monitor ${{ github.ref_name }}"
+          releaseBody: "See CHANGELOG.md for details."
+          releaseDraft: false
+          prerelease: false
+
+  build:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -29,7 +50,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -55,20 +76,13 @@ jobs:
       - name: Install frontend deps
         run: bun install
 
-      - name: Build frontend
-        run: bun run vite:build
-
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0.6.2
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "System Monitor ${{ github.ref_name }}"
-          releaseBody: "See CHANGELOG.md for details."
-          releaseDraft: false
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
           tauriScript: bun run tauri
