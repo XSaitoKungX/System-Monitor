@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GpuInfo {
     pub index: usize,
     pub name: String,
@@ -19,9 +19,11 @@ pub struct GpuInfo {
     pub fan_speed_percent: Option<u32>,
     pub fan_rpm: Option<u32>,
     pub card_path: String,
+    pub encoder_percent: Option<u32>,
+    pub decoder_percent: Option<u32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GpuStats {
     pub gpus: Vec<GpuInfo>,
     pub platform_note: Option<String>,

@@ -40,6 +40,7 @@ export interface DiskInfo {
   is_removable: boolean;
   read_bytes_per_sec: number;
   write_bytes_per_sec: number;
+  disk_type: string;
 }
 
 export interface DiskStats {
@@ -56,6 +57,8 @@ export interface NetworkInterface {
   ip_address: string[];
   iface_type: "wifi" | "lan" | "other";
   is_primary: boolean;
+  errors_on_received: number;
+  errors_on_transmitted: number;
 }
 
 export interface NetworkStats {
@@ -84,6 +87,8 @@ export interface GpuInfo {
   fan_speed_percent: number | null;
   fan_rpm: number | null;
   card_path: string;
+  encoder_percent: number | null;
+  decoder_percent: number | null;
 }
 
 export interface GpuStats {
@@ -104,6 +109,8 @@ export interface ProcessInfo {
   written_bytes: number;
   started_at: number;
   user: string;
+  run_time_secs: number;
+  cmd: string[];
 }
 
 export interface SystemInfo {
@@ -114,6 +121,8 @@ export interface SystemInfo {
   uptime_seconds: number;
   boot_time: number;
   cpu_arch: string;
+  username: string;
+  locale: string;
 }
 
 export type Theme = "default" | "dark" | "light" | "space" | "dev" | "midnight" | "rose" | "nord";

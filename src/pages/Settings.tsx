@@ -185,10 +185,10 @@ function SettingsTab() {
   return (
     <div className="space-y-5">
       {/* Theme */}
-      <div className="glass p-5 space-y-4">
+      <div className="glass-card space-y-4">
         <div className="flex items-center gap-2">
           <Monitor size={14} style={{ color: "rgb(var(--accent))" }} />
-          <h2 className="text-sm font-semibold text-primary">Appearance</h2>
+          <h2 className="text-token-sm font-semibold text-primary">Appearance</h2>
         </div>
         <div className="grid grid-cols-4 gap-2">
           {THEMES.map((t) => (
@@ -219,11 +219,11 @@ function SettingsTab() {
       </div>
 
       {/* Refresh interval */}
-      <div className="glass p-5 space-y-4">
+      <div className="glass-card space-y-4">
         <div className="flex items-center gap-2">
           <RefreshCw size={14} style={{ color: "rgb(var(--accent))" }} />
           <div>
-            <h2 className="text-sm font-semibold text-primary">Refresh Interval</h2>
+            <h2 className="text-token-sm font-semibold text-primary">Refresh Interval</h2>
             <p className="text-xs text-muted mt-0.5">How often stats are fetched from the backend. Lower = more CPU.</p>
           </div>
         </div>
@@ -246,10 +246,10 @@ function SettingsTab() {
       </div>
 
       {/* Window behaviour */}
-      <div className="glass p-5 space-y-4">
+      <div className="glass-card space-y-4">
         <div className="flex items-center gap-2">
           <Layers size={14} style={{ color: "rgb(var(--accent))" }} />
-          <h2 className="text-sm font-semibold text-primary">Window Behaviour</h2>
+          <h2 className="text-token-sm font-semibold text-primary">Window Behaviour</h2>
         </div>
         <div className="space-y-4">
           <Toggle
@@ -268,10 +268,10 @@ function SettingsTab() {
       </div>
 
       {/* Alerts */}
-      <div className="glass p-5 space-y-3">
+      <div className="glass-card space-y-3">
         <div className="flex items-center gap-2">
           <Bell size={14} style={{ color: "rgb(var(--accent))" }} />
-          <h2 className="text-sm font-semibold text-primary">Alert Thresholds</h2>
+          <h2 className="text-token-sm font-semibold text-primary">Alert Thresholds</h2>
         </div>
         <AlertThresholds />
       </div>
@@ -354,11 +354,11 @@ function UpdateSection() {
   };
 
   return (
-    <div className="glass p-5 space-y-3">
+    <div className="glass-card space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <RefreshCw size={14} style={{ color: "rgb(var(--accent))" }} />
-          <h2 className="text-sm font-semibold text-primary">Updates</h2>
+          <h2 className="text-token-sm font-semibold text-primary">Updates</h2>
         </div>
         {updateStatus === "idle" && (
           <button
@@ -423,7 +423,7 @@ function DangerSection() {
   const [confirmQuit, setConfirmQuit] = useState(false);
 
   return (
-    <div className="glass p-5 space-y-3" style={{ borderColor: "rgb(var(--danger)/0.25)" }}>
+    <div className="glass-card space-y-3" style={{ borderColor: "rgb(var(--danger)/0.25)" }}>
       <div className="flex items-center gap-2 mb-1">
         <Trash2 size={14} style={{ color: "rgb(var(--danger))" }} />
         <h2 className="text-sm font-semibold" style={{ color: "rgb(var(--danger))" }}>Danger Zone</h2>
@@ -486,7 +486,7 @@ function AboutTab() {
   return (
     <div className="space-y-5">
       {/* Hero */}
-      <div className="glass p-6 overflow-hidden relative">
+      <div className="glass-card overflow-hidden relative">
         <div className="absolute inset-0 pointer-events-none"
           style={{ background: "radial-gradient(ellipse at top right, rgb(var(--accent)/0.07), transparent 60%)" }} />
         <div className="flex items-center gap-5">
@@ -498,15 +498,15 @@ function AboutTab() {
             <h1 className="text-2xl font-bold text-primary tracking-tight">System Monitor</h1>
             <p className="text-sm text-muted">Real-time system metrics for your desktop</p>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium"
+              <span className="badge font-mono"
                 style={{ background: "rgb(var(--accent)/0.15)", color: "rgb(var(--accent))" }}>
-                v0.2.2
+                v0.3.0
               </span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium"
+              <span className="badge"
                 style={{ background: "rgb(var(--success)/0.12)", color: "rgb(var(--success))" }}>
                 MIT License
               </span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium text-muted"
+              <span className="badge text-muted"
                 style={{ background: "rgb(var(--bg-hover))" }}>
                 Open Source
               </span>
@@ -540,8 +540,8 @@ function AboutTab() {
       </div>
 
       {/* Tech Stack */}
-      <div className="glass p-5 space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted">Tech Stack</p>
+      <div className="glass-card space-y-3">
+        <p className="text-token-xs font-semibold uppercase tracking-widest text-muted">Tech Stack</p>
         <div className="grid grid-cols-3 gap-3">
           {TECH_STACK.map(({ icon: Icon, label, desc }) => (
             <div key={label} className="flex flex-col gap-1.5 p-3 rounded-lg"
@@ -563,8 +563,8 @@ function AboutTab() {
       </div>
 
       {/* Developer */}
-      <div className="glass p-5">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-4">Developer</p>
+      <div className="glass-card">
+        <p className="text-token-xs font-semibold uppercase tracking-widest text-muted mb-4">Developer</p>
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full overflow-hidden shrink-0"
             style={{ boxShadow: "0 0 0 2px rgb(var(--accent)/0.3)" }}>
@@ -591,7 +591,7 @@ export function Settings() {
   const [tab, setTab] = useState<Tab>("settings");
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="page-layout max-w-2xl">
       {/* Tab bar */}
       <div className="flex items-center gap-1 p-1 rounded-xl w-fit"
         style={{ background: "rgb(var(--bg-secondary))" }}>

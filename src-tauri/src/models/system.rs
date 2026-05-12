@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SystemInfo {
     pub os_name: String,
     pub os_version: String,
@@ -9,4 +9,6 @@ pub struct SystemInfo {
     pub uptime_seconds: u64,
     pub boot_time: i64,
     pub cpu_arch: String,
+    pub username: String,
+    pub locale: String,
 }

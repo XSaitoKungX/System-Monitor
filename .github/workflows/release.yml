@@ -9,19 +9,40 @@ permissions:
   contents: write
 
 jobs:
+  changelog:
+    runs-on: ubuntu-24.04
+    outputs:
+      body: ${{ steps.cliff.outputs.content }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history required for git-cliff
+
+      - name: Generate changelog for this release
+        id: cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+
   release:
+    needs: changelog
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: ubuntu-24.04
             args: ""
-          - platform: windows-latest
+            rust-targets: ""
+          - platform: windows-2025
             args: ""
-          - platform: macos-latest
+            rust-targets: ""
+          - platform: macos-26
             args: "--target aarch64-apple-darwin"
-          - platform: macos-latest
+            rust-targets: "aarch64-apple-darwin"
+          - platform: macos-26
             args: "--target x86_64-apple-darwin"
+            rust-targets: "x86_64-apple-darwin"
 
     runs-on: ${{ matrix.platform }}
 
@@ -29,25 +50,26 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version: latest
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.rust-targets }}
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-24.04'
+        if: matrix.platform == 'ubuntu-24.04'  # only Linux needs GTK/WebKit deps
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Cache Rust build artefacts
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.9.1
         with:
           workspaces: src-tauri
+          cache-on-failure: true
 
       - name: Install frontend deps
         run: bun install
@@ -61,7 +83,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "System Monitor ${{ github.ref_name }}"
-          releaseBody: "See CHANGELOG.md for details."
+          releaseBody: ${{ needs.changelog.outputs.body }}
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

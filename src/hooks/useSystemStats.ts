@@ -80,8 +80,8 @@ export function useNetworkStats() {
     const unlisten = listen<NetworkStats>("stats:net", (e) => {
       const stats = e.payload;
       setNet(stats);
-      setRxHistory((prev) => [...prev.slice(-59), stats.total_received_per_sec]);
-      setTxHistory((prev) => [...prev.slice(-59), stats.total_transmitted_per_sec]);
+      setRxHistory((prev) => [...prev.slice(-59), stats.primary_rx_per_sec]);
+      setTxHistory((prev) => [...prev.slice(-59), stats.primary_tx_per_sec]);
     });
     return () => { unlisten.then((f) => f()); };
   }, [setNet]);
@@ -128,9 +128,13 @@ export function useSystemInfo() {
   const [data, setData] = useState<SystemInfo | null>(null);
 
   useEffect(() => {
-    invoke<SystemInfo>("get_system_info")
-      .then(setData)
-      .catch((e) => console.error("Failed to fetch system info", e));
+    const fetch = () =>
+      invoke<SystemInfo>("get_system_info")
+        .then(setData)
+        .catch((e) => console.error("Failed to fetch system info", e));
+    fetch();
+    const id = setInterval(fetch, 5000);
+    return () => clearInterval(id);
   }, []);
 
   return data;

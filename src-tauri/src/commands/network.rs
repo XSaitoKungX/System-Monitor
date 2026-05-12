@@ -4,7 +4,7 @@ use crate::state::SysState;
 
 fn iface_type(name: &str) -> &'static str {
     let n = name.to_lowercase();
-    if n.starts_with("wl") { return "wifi"; }
+    if n.starts_with("wl") || n.starts_with("wlan") || n.starts_with("wifi") { return "wifi"; }
     if n.starts_with("eth") || n.starts_with("enp") || n.starts_with("ens")
         || n.starts_with("eno") || n.starts_with("em") { return "lan"; }
     "other"
@@ -13,7 +13,10 @@ fn iface_type(name: &str) -> &'static str {
 fn is_physical(name: &str) -> bool {
     let n = name.to_lowercase();
     if n.starts_with("lo") { return false; }
-    let blocklist = ["docker", "br-", "veth", "virbr", "tun", "tap", "dummy", "vcan", "sit", "vmnet", "vboxnet", "wg"];
+    let blocklist = [
+        "docker", "br-", "veth", "virbr", "tun", "tap", "dummy",
+        "vcan", "sit", "vmnet", "vboxnet", "wg", "bond", "team",
+    ];
     if blocklist.iter().any(|prefix| n.starts_with(prefix)) { return false; }
     true
 }
@@ -65,6 +68,8 @@ pub fn get_network_stats(state: State<SysState>) -> NetworkStats {
                 ip_address: ips,
                 iface_type: iface_type(name).to_string(),
                 is_primary: false,
+                errors_on_received: data.errors_on_received(),
+                errors_on_transmitted: data.errors_on_transmitted(),
             }
         })
         .collect();
@@ -81,7 +86,7 @@ pub fn get_network_stats(state: State<SysState>) -> NetworkStats {
 
     let (primary_rx, primary_tx) = primary_idx
         .map(|i| (interfaces[i].received_bytes_per_sec, interfaces[i].transmitted_bytes_per_sec))
-        .unwrap_or((total_rx_sec, total_tx_sec));
+        .unwrap_or((0, 0));
 
     interfaces.sort_by(|a, b| b.is_primary.cmp(&a.is_primary)
         .then(b.iface_type.cmp(&a.iface_type))

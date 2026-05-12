@@ -2,130 +2,134 @@ import { useMemo } from "react";
 import { useCpuStats } from "@/hooks/useSystemStats";
 import { GaugeChart } from "@/components/charts/GaugeChart";
 import { LineChart } from "@/components/charts/LineChart";
-import { formatFrequency, getUsageClass } from "@/lib/utils";
-import { clsx } from "clsx";
+import { formatFrequency, formatCache, getUsageColor, getUsageClass, clampPct } from "@/lib/utils";
+import { Thermometer, Cpu as CpuIcon, Zap, Layers } from "lucide-react";
 
 export function CPU() {
   const { data, history } = useCpuStats();
+  const chartData = useMemo(() => history.map((v, i) => ({ t: i, cpu: v })), [history]);
 
-  const chartData = useMemo(
-    () => history.map((v, i) => ({ t: i, cpu: v })),
-    [history]
+  if (!data) return (
+    <div className="flex items-center justify-center h-full">
+      <span className="text-muted text-token-sm animate-pulse-dot">Loading CPU data…</span>
+    </div>
   );
 
-  if (!data) {
-    return <div className="text-muted text-token-sm">Loading CPU data...</div>;
-  }
+  const tempColor = data.temperature != null
+    ? data.temperature >= 85 ? "rgb(var(--danger))" : data.temperature >= 70 ? "rgb(var(--warning))" : "rgb(var(--success))"
+    : "rgb(var(--text-muted))";
 
   return (
     <div className="page-layout">
-      <div>
-        <h1 className="text-token-xl font-bold text-primary">CPU</h1>
-        <p className="text-token-sm text-muted mt-0.5">{data.brand} · {data.vendor}</p>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-card">
-        <div className="glass p-card text-center">
-          <GaugeChart value={data.usage_total} size={110} sublabel="Total" />
-        </div>
-        <div className="glass p-card flex flex-col justify-center gap-card">
-          <div>
-            <p className="text-token-xs text-muted">Frequency</p>
-            <p className="text-token-lg font-semibold text-primary">{formatFrequency(data.frequency_mhz)}</p>
-          </div>
-          <div>
-            <p className="text-token-xs text-muted">Physical Cores</p>
-            <p className="text-token-base font-medium text-primary">{data.physical_cores}</p>
-          </div>
-          <div>
-            <p className="text-token-xs text-muted">Logical Cores</p>
-            <p className="text-token-base font-medium text-primary">{data.logical_cores}</p>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-token-xl font-bold text-primary">CPU</h1>
+          <p className="text-token-xs text-muted mt-0.5">{data.brand}</p>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <span className="badge" style={{ background: "rgb(var(--accent)/0.12)", color: "rgb(var(--accent))" }}>
+              {data.vendor}
+            </span>
+            <span className="badge" style={{ background: "rgb(var(--bg-elevated))", color: "rgb(var(--text-muted))" }}>
+              {data.architecture}
+            </span>
+            <span className="badge" style={{ background: "rgb(var(--bg-elevated))", color: "rgb(var(--text-muted))" }}>
+              {data.physical_cores}P / {data.logical_cores}L cores
+            </span>
           </div>
         </div>
-        <div className="glass p-card flex flex-col justify-center gap-card">
-          <div>
-            <p className="text-token-xs text-muted">Temperature</p>
-            <p className="text-token-lg font-semibold text-primary">
-              {data.temperature != null ? `${data.temperature.toFixed(1)} °C` : "N/A"}
-            </p>
-          </div>
-          <div>
-            <p className="text-token-xs text-muted">Architecture</p>
-            <p className="text-token-base font-medium text-primary">{data.architecture}</p>
-          </div>
-        </div>
-        <div className="glass p-card text-center">
-          <p className="text-token-xs text-muted mb-2">Usage</p>
-          <p className={clsx("text-token-4xl font-bold", getUsageClass(data.usage_total))}>
-            {data.usage_total.toFixed(1)}
-            <span className="text-token-xl">%</span>
+        <div className="text-right shrink-0">
+          <p className={`text-token-4xl font-bold tabular-nums ${getUsageClass(data.usage_total)}`}>
+            {data.usage_total.toFixed(1)}<span className="text-token-xl">%</span>
           </p>
+          <p className="text-token-xs text-muted">{formatFrequency(data.frequency_mhz)}</p>
         </div>
       </div>
 
-      <div className="glass p-card">
-        <p className="text-token-sm font-medium text-primary mb-3">CPU Usage History</p>
-        <LineChart
-          data={chartData}
+      {/* Main row: gauge + stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-card">
+        <div className="glass-card flex flex-col items-center justify-center gap-2 py-4">
+          <GaugeChart value={data.usage_total} size={120} sublabel="Total" />
+        </div>
+
+        <div className="md:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-card">
+          {[
+            { icon: <Zap size={14} />, label: "Frequency", value: formatFrequency(data.frequency_mhz), color: "rgb(var(--accent))" },
+            { icon: <CpuIcon size={14} />, label: "P-Cores", value: String(data.physical_cores), color: "rgb(var(--info))" },
+            { icon: <Layers size={14} />, label: "L-Cores", value: String(data.logical_cores), color: "rgb(var(--info))" },
+            { icon: <Thermometer size={14} />, label: "Temp", value: data.temperature != null ? `${data.temperature.toFixed(1)}°C` : "N/A", color: tempColor },
+          ].map(({ icon, label, value, color }) => (
+            <div key={label} className="stat-tile">
+              <span className="text-token-xs text-muted flex items-center gap-1.5" style={{ color }}>
+                {icon} {label}
+              </span>
+              <span className="text-token-xl font-bold" style={{ color }}>{value}</span>
+            </div>
+          ))}
+
+          {/* Cache */}
+          <div className="stat-tile col-span-2">
+            <span className="text-token-xs text-muted mb-1">Cache</span>
+            <div className="flex gap-3 flex-wrap">
+              {[["L1", data.cache_l1_kb], ["L2", data.cache_l2_kb], ["L3", data.cache_l3_kb]].map(([lvl, kb]) =>
+                kb != null ? (
+                  <div key={String(lvl)} className="flex flex-col items-center">
+                    <span className="text-token-xs text-muted">{lvl}</span>
+                    <span className="text-token-sm font-semibold text-primary font-mono">{formatCache(Number(kb))}</span>
+                  </div>
+                ) : null
+              )}
+            </div>
+          </div>
+
+          {/* ISA features */}
+          <div className="stat-tile col-span-2">
+            <span className="text-token-xs text-muted mb-1">Instruction Sets</span>
+            <div className="flex flex-wrap gap-1">
+              {data.features.length > 0
+                ? data.features.map((f) => (
+                    <span key={f} className="badge"
+                      style={{ background: "rgb(var(--accent)/0.1)", color: "rgb(var(--accent))" }}>
+                      {f}
+                    </span>
+                  ))
+                : <span className="text-token-xs text-muted">N/A</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* History chart */}
+      <div className="glass-card">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-token-sm font-semibold text-primary">Usage History</p>
+          <span className={`text-token-xs font-semibold tabular-nums ${getUsageClass(data.usage_total)}`}>
+            {data.usage_total.toFixed(1)}%
+          </span>
+        </div>
+        <LineChart data={chartData}
           lines={[{ key: "cpu", color: "rgb(var(--accent))", name: "CPU %" }]}
-          height={160}
-          unit="%"
-          domain={[0, 100]}
-        />
+          height={140} unit="%" domain={[0, 100]} />
       </div>
 
-      {/* Cache + Features */}
-      <div className="grid grid-cols-2 gap-card">
-        <div className="glass p-card flex flex-col gap-3">
-          <p className="text-token-sm font-medium text-primary">Cache</p>
-          <div className="flex flex-col gap-2">
-            {data.cache_l1_kb != null && (
-              <div className="flex items-center justify-between">
-                <span className="text-token-xs text-muted">L1</span>
-                <span className="text-token-xs font-mono text-primary">{data.cache_l1_kb >= 1024 ? `${(data.cache_l1_kb / 1024).toFixed(0)} MB` : `${data.cache_l1_kb} KB`}</span>
-              </div>
-            )}
-            {data.cache_l2_kb != null && (
-              <div className="flex items-center justify-between">
-                <span className="text-token-xs text-muted">L2</span>
-                <span className="text-token-xs font-mono text-primary">{data.cache_l2_kb >= 1024 ? `${(data.cache_l2_kb / 1024).toFixed(0)} MB` : `${data.cache_l2_kb} KB`}</span>
-              </div>
-            )}
-            {data.cache_l3_kb != null && (
-              <div className="flex items-center justify-between">
-                <span className="text-token-xs text-muted">L3</span>
-                <span className="text-token-xs font-mono text-primary">{data.cache_l3_kb >= 1024 ? `${(data.cache_l3_kb / 1024).toFixed(0)} MB` : `${data.cache_l3_kb} KB`}</span>
-              </div>
-            )}
-            {data.cache_l1_kb == null && data.cache_l2_kb == null && data.cache_l3_kb == null && (
-              <span className="text-token-xs text-muted">Not available</span>
-            )}
-          </div>
-        </div>
-        <div className="glass p-card flex flex-col gap-3">
-          <p className="text-token-sm font-medium text-primary">Instruction Sets</p>
-          <div className="flex flex-wrap gap-1.5">
-            {data.features.length > 0
-              ? data.features.map(f => (
-                  <span key={f} className="text-token-xs font-mono px-1.5 py-0.5 rounded"
-                    style={{ background: "rgb(var(--accent)/0.12)", color: "rgb(var(--accent))" }}>
-                    {f}
-                  </span>
-                ))
-              : <span className="text-token-xs text-muted">Not available</span>}
-          </div>
-        </div>
-      </div>
-
-      <div className="glass p-card">
-        <p className="text-token-sm font-medium text-primary mb-3">Per-Core Usage</p>
-        <div className="grid grid-cols-4 sm:grid-cols-8 gap-card">
-          {data.usage_per_core.map((usage, i) => (
+      {/* Per-core grid */}
+      <div className="glass-card">
+        <p className="text-token-sm font-semibold text-primary mb-3">Per-Core Usage</p>
+        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))" }}>
+          {data.usage_per_core.map((u, i) => (
             <div key={i} className="flex flex-col items-center gap-1">
-              <GaugeChart value={usage} size={72} unit="%" />
-              <span className="text-token-xs text-muted">Core {i}</span>
-              <span className={clsx("text-token-xs font-medium", getUsageClass(usage))}>
-                {usage.toFixed(0)}%
+              <div className="w-full rounded-sm overflow-hidden" style={{ height: 48, background: "rgb(var(--bg-hover))" }}>
+                <div className="w-full rounded-sm transition-all duration-500"
+                  style={{
+                    height: `${clampPct(u)}%`,
+                    marginTop: `${100 - clampPct(u)}%`,
+                    background: getUsageColor(u),
+                    opacity: 0.85,
+                  }} />
+              </div>
+              <span className="text-token-xs text-muted">C{i}</span>
+              <span className="text-token-xs font-semibold tabular-nums" style={{ color: getUsageColor(u) }}>
+                {u.toFixed(0)}%
               </span>
             </div>
           ))}

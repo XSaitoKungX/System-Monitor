@@ -1,7 +1,25 @@
 use tauri::State;
-use sysinfo::{Signal, ProcessesToUpdate, ProcessRefreshKind};
+use sysinfo::{Signal, ProcessesToUpdate, ProcessRefreshKind, ProcessStatus};
 use crate::models::process::ProcessInfo;
 use crate::state::SysState;
+
+fn status_str(s: ProcessStatus) -> &'static str {
+    match s {
+        ProcessStatus::Run      => "Running",
+        ProcessStatus::Sleep    => "Sleeping",
+        ProcessStatus::Idle     => "Idle",
+        ProcessStatus::Stop     => "Stopped",
+        ProcessStatus::Zombie   => "Zombie",
+        ProcessStatus::Tracing  => "Tracing",
+        ProcessStatus::Dead     => "Dead",
+        ProcessStatus::Wakekill => "Wakekill",
+        ProcessStatus::Waking   => "Waking",
+        ProcessStatus::Parked   => "Parked",
+        ProcessStatus::LockBlocked => "LockBlocked",
+        ProcessStatus::UninterruptibleDiskSleep => "DiskSleep",
+        _                       => "Unknown",
+    }
+}
 
 #[tauri::command]
 pub fn get_processes(state: State<SysState>) -> Vec<ProcessInfo> {
@@ -22,14 +40,19 @@ pub fn get_processes(state: State<SysState>) -> Vec<ProcessInfo> {
         let exe = proc.exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
         let user = proc.user_id()
             .map(|u| u.to_string())
-            .unwrap_or_else(|| "—".to_string());
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let cmd: Vec<String> = proc.cmd()
+            .iter()
+            .map(|s| s.to_string_lossy().to_string())
+            .collect();
 
         Some(ProcessInfo {
             pid: pid.as_u32(),
             parent_pid: proc.parent().map(|p| p.as_u32()),
             name,
             exe,
-            status: format!("{:?}", proc.status()),
+            status: status_str(proc.status()).to_string(),
             cpu_usage: proc.cpu_usage() / cpu_count,
             memory_bytes: proc.memory(),
             virtual_memory_bytes: proc.virtual_memory(),
@@ -37,6 +60,8 @@ pub fn get_processes(state: State<SysState>) -> Vec<ProcessInfo> {
             written_bytes: proc.disk_usage().written_bytes,
             started_at: proc.start_time() as i64,
             user,
+            run_time_secs: proc.run_time(),
+            cmd,
         })
     }).collect();
 

@@ -4,8 +4,11 @@ use crate::state::SysState;
 
 #[cfg(target_os = "linux")]
 fn parse_meminfo_kb(key: &str, content: &str) -> Option<u64> {
+    // Match the exact key including the trailing colon to avoid e.g.
+    // "Cached:" accidentally matching "CachedSwap:" or "CachedFiles:".
+    let needle = if key.ends_with(':') { key.to_string() } else { format!("{key}:") };
     content.lines()
-        .find(|l| l.starts_with(key))
+        .find(|l| l.starts_with(needle.as_str()))
         .and_then(|l| l.split_whitespace().nth(1))
         .and_then(|v| v.parse::<u64>().ok())
         .map(|kb| kb * 1024)
@@ -19,11 +22,20 @@ pub fn get_memory_stats(state: State<SysState>) -> MemoryStats {
     let total = sys.total_memory();
     let used = sys.used_memory();
     let available = sys.available_memory();
-    let usage_percent = if total > 0 { (used as f32 / total as f32) * 100.0 } else { 0.0 };
+    // Use f64 to avoid precision loss on large RAM values before truncating to f32.
+    let usage_percent = if total > 0 {
+        (used as f64 / total as f64 * 100.0) as f32
+    } else {
+        0.0
+    };
 
     let swap_total = sys.total_swap();
     let swap_used = sys.used_swap();
-    let swap_usage_percent = if swap_total > 0 { (swap_used as f32 / swap_total as f32) * 100.0 } else { 0.0 };
+    let swap_usage_percent = if swap_total > 0 {
+        (swap_used as f64 / swap_total as f64 * 100.0) as f32
+    } else {
+        0.0
+    };
 
     // ── Linux: parse /proc/meminfo for detail breakdown ───────────────────────
     #[cfg(target_os = "linux")]

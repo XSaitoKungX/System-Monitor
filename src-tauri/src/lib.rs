@@ -17,13 +17,16 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[derive(Deserialize)]
-struct WindowBehavior {
+struct WindowBehaviorPayload {
     close_to_tray: bool,
 }
 
 #[tauri::command]
-fn update_window_behavior(app: tauri::AppHandle, behavior: WindowBehavior) {
-    app.manage(behavior);
+fn update_window_behavior(
+    behavior: WindowBehaviorPayload,
+    close_to_tray_state: tauri::State<Arc<Mutex<bool>>>,
+) {
+    *close_to_tray_state.lock().unwrap() = behavior.close_to_tray;
 }
 
 #[tauri::command]
@@ -50,13 +53,16 @@ fn set_refresh_interval(interval_ms: u64, interval_state: tauri::State<Arc<Mutex
 fn spawn_stats_loop(app: tauri::AppHandle, interval_state: Arc<Mutex<u64>>) {
     std::thread::spawn(move || {
         loop {
-            let interval_ms = *interval_state.lock().unwrap();
+            // Read interval and immediately drop the lock — don't hold it across I/O.
+            let interval_ms = {
+                *interval_state.lock().unwrap()
+            };
 
             let state = app.state::<state::SysState>();
 
             let cpu  = get_cpu_stats(state.clone());
             let mem  = get_memory_stats(state.clone());
-            let disk = get_disk_stats();
+            let disk = get_disk_stats(state.clone());
             let net  = get_network_stats(state.clone());
             let gpu  = get_gpu_stats();
 
@@ -73,11 +79,13 @@ fn spawn_stats_loop(app: tauri::AppHandle, interval_state: Arc<Mutex<u64>>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let interval_state: Arc<Mutex<u64>> = Arc::new(Mutex::new(3000));
+    let interval_state: Arc<Mutex<u64>>  = Arc::new(Mutex::new(3000));
+    let close_to_tray:   Arc<Mutex<bool>> = Arc::new(Mutex::new(true));
 
     tauri::Builder::default()
         .manage(state::SysState::new())
         .manage(interval_state.clone())
+        .manage(close_to_tray.clone())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -159,8 +167,9 @@ pub fn run() {
                 if window.label() == "main" {
                     // Check if closeToTray is enabled (default true)
                     let app_handle = window.app_handle();
-                    let close_to_tray = app_handle.try_state::<WindowBehavior>()
-                        .map(|b| b.close_to_tray)
+                    let close_to_tray = app_handle
+                        .try_state::<Arc<Mutex<bool>>>()
+                        .map(|s| *s.lock().unwrap())
                         .unwrap_or(true);
 
                     if close_to_tray {

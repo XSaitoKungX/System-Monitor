@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProcessInfo {
     pub pid: u32,
     pub parent_pid: Option<u32>,
@@ -14,4 +14,6 @@ pub struct ProcessInfo {
     pub written_bytes: u64,
     pub started_at: i64,
     pub user: String,
+    pub run_time_secs: u64,
+    pub cmd: Vec<String>,
 }

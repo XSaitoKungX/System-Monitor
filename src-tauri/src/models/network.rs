@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NetworkInterface {
     pub name: String,
     pub received_bytes: u64,
@@ -11,9 +11,11 @@ pub struct NetworkInterface {
     pub ip_address: Vec<String>,
     pub iface_type: String,
     pub is_primary: bool,
+    pub errors_on_received: u64,
+    pub errors_on_transmitted: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NetworkStats {
     pub interfaces: Vec<NetworkInterface>,
     pub primary_rx_per_sec: u64,

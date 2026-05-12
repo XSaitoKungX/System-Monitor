@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DiskInfo {
     pub name: String,
     pub mount_point: String,
@@ -12,9 +12,10 @@ pub struct DiskInfo {
     pub is_removable: bool,
     pub read_bytes_per_sec: u64,
     pub write_bytes_per_sec: u64,
+    pub disk_type: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DiskStats {
     pub disks: Vec<DiskInfo>,
 }

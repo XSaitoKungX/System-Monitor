@@ -138,29 +138,37 @@ function SpeedGauge({ value, max, color, label }: { value: number | null; max: n
   const pct = value !== null ? Math.min((value / 1_000_000 / max) * 100, 100) : 0;
   const circumference = 2 * Math.PI * 54;
   const dash = (pct / 100) * circumference;
+  const uid = `sg-${label.toLowerCase().replace(/\s/g, "-")}`;
 
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="relative w-36 h-36">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+          <defs>
+            <filter id={`${uid}-glow`} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+          </defs>
           <circle cx="60" cy="60" r="54" fill="none" strokeWidth="8"
-            style={{ stroke: "rgb(var(--bg-hover))" }} />
+            stroke="rgb(var(--bg-hover))" />
           <circle cx="60" cy="60" r="54" fill="none" strokeWidth="8"
             strokeLinecap="round"
+            filter={`url(#${uid}-glow)`}
             style={{
               stroke: color,
               strokeDasharray: `${dash} ${circumference - dash}`,
-              transition: "stroke-dasharray 0.3s ease",
+              transition: "stroke-dasharray 0.4s cubic-bezier(0.4,0,0.2,1)",
             }} />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold text-primary">
+          <span className="text-token-2xl font-bold text-primary">
             {value !== null ? (value / 1_000_000).toFixed(0) : "—"}
           </span>
-          <span className="text-xs text-muted">Mbps</span>
+          <span className="text-token-xs text-muted">Mbps</span>
         </div>
       </div>
-      <span className="text-sm font-medium text-secondary">{label}</span>
+      <span className="text-token-sm font-medium text-secondary">{label}</span>
     </div>
   );
 }
@@ -345,7 +353,7 @@ export function Speedtest() {
       : null;
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
+    <div className="page-layout max-w-2xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-primary">Speedtest</h1>
         {(phase === "done" || phase === "idle") && result.download !== null && (
@@ -360,7 +368,7 @@ export function Speedtest() {
       </div>
 
       {/* Gauges */}
-      <div className="glass p-6">
+      <div className="glass-card">
         <div className="flex items-center justify-center gap-12">
           <div className="flex flex-col items-center gap-1">
             <ArrowDown size={16} style={{ color: "rgb(var(--success))" }} />
@@ -462,8 +470,8 @@ export function Speedtest() {
 
       {/* Quality scores */}
       {quality && (
-        <div className="glass p-4">
-          <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Connection Quality</p>
+        <div className="glass-card">
+          <p className="text-token-xs font-semibold text-muted uppercase tracking-wider mb-3">Connection Quality</p>
           <div className="grid grid-cols-4 gap-3">
             {([
               { label: "Browsing", key: "browsing" as const, icon: <Globe size={16} /> },
@@ -471,8 +479,7 @@ export function Speedtest() {
               { label: "Streaming", key: "streaming" as const, icon: <Play size={16} /> },
               { label: "Video Call", key: "video" as const, icon: <Video size={16} /> },
             ]).map(({ label, key, icon }) => (
-              <div key={key} className="flex flex-col items-center gap-1.5 p-3 rounded-lg"
-                style={{ background: "rgb(var(--bg-hover))" }}>
+              <div key={key} className="stat-tile items-center text-center">
                 <span style={{ color: QUALITY_COLOR[quality[key]] }}>{icon}</span>
                 <span className="text-xs font-semibold" style={{ color: QUALITY_COLOR[quality[key]] }}>
                   {quality[key]}
@@ -485,8 +492,8 @@ export function Speedtest() {
       )}
 
       {/* Connection info */}
-      <div className="glass p-4">
-        <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Connection</p>
+      <div className="glass-card">
+        <p className="text-token-xs font-semibold text-muted uppercase tracking-wider mb-3">Connection</p>
         <div className="grid grid-cols-3 gap-4">
           <div className="flex items-start gap-2">
             <Wifi size={14} className="mt-0.5 shrink-0" style={{ color: "rgb(var(--accent))" }} />

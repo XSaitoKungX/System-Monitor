@@ -1,4 +1,4 @@
-import { getUsageColor } from "@/lib/utils";
+import { clampPct, getUsageColor } from "@/lib/utils";
 
 interface GaugeChartProps {
   value: number;
@@ -7,6 +7,7 @@ interface GaugeChartProps {
   label?: string;
   sublabel?: string;
   unit?: string;
+  color?: string;
 }
 
 export function GaugeChart({
@@ -16,83 +17,64 @@ export function GaugeChart({
   label,
   sublabel,
   unit = "%",
+  color: colorOverride,
 }: GaugeChartProps) {
-  const pct = Math.min((value / max) * 100, 100);
-  const r = 46;
-  const cx = 60;
-  const cy = 60;
-  const startAngle = -220;
-  const endAngle = 40;
-  const totalAngle = endAngle - startAngle;
-  const sweepAngle = (pct / 100) * totalAngle;
+  const pct    = clampPct((value / max) * 100);
+  const color  = colorOverride ?? getUsageColor(pct);
 
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const cx = 60, cy = 60, r = 46;
+  const START = -215, END = 35;
+  const TOTAL = END - START;
 
-  const arcPath = (start: number, end: number) => {
-    const s = toRad(start);
-    const e = toRad(end);
-    const x1 = cx + r * Math.cos(s);
-    const y1 = cy + r * Math.sin(s);
-    const x2 = cx + r * Math.cos(e);
-    const y2 = cy + r * Math.sin(e);
-    const largeArc = end - start > 180 ? 1 : 0;
-    return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const arc = (from: number, to: number) => {
+    const [sx, sy] = [cx + r * Math.cos(toRad(from)), cy + r * Math.sin(toRad(from))];
+    const [ex, ey] = [cx + r * Math.cos(toRad(to)),   cy + r * Math.sin(toRad(to))];
+    return `M ${sx} ${sy} A ${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${ex} ${ey}`;
   };
 
-  const color = getUsageColor(pct);
+  const sweepEnd = START + (pct / 100) * TOTAL;
+  const uid = `gauge-${Math.round(value)}-${size}`;
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 120 120"
-        style={{ overflow: "visible" }}
-      >
-        <path
-          d={arcPath(startAngle, endAngle)}
-          fill="none"
-          stroke="rgb(var(--border))"
-          strokeWidth="8"
-          strokeLinecap="round"
-        />
+      <svg width={size} height={size} viewBox="0 0 120 120" style={{ overflow: "visible" }}>
+        <defs>
+          <filter id={`${uid}-glow`} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        {/* Track */}
+        <path d={arc(START, END)} fill="none"
+          stroke="rgb(var(--bg-hover))" strokeWidth="7" strokeLinecap="round" />
+
+        {/* Fill */}
         {pct > 0 && (
-          <path
-            d={arcPath(startAngle, startAngle + sweepAngle)}
-            fill="none"
-            stroke={color}
-            strokeWidth="8"
-            strokeLinecap="round"
-          />
+          <path d={arc(START, sweepEnd)} fill="none"
+            stroke={color} strokeWidth="7" strokeLinecap="round"
+            filter={`url(#${uid}-glow)`}
+            style={{ transition: "d 0.5s cubic-bezier(0.4,0,0.2,1)" }} />
         )}
-        <text
-          x={cx}
-          y={cy + 6}
-          textAnchor="middle"
-          fill="rgb(var(--text-primary))"
-          fontSize="18"
-          fontWeight="700"
-          fontFamily="inherit"
-        >
+
+        {/* Value */}
+        <text x={cx} y={cy + 5} textAnchor="middle"
+          fill="rgb(var(--text-primary))" fontSize="17" fontWeight="700" fontFamily="inherit">
           {pct.toFixed(0)}{unit}
         </text>
+
+        {/* Sublabel */}
         {sublabel && (
-          <text
-            x={cx}
-            y={cy + 22}
-            textAnchor="middle"
-            fill="rgb(var(--text-muted))"
-            fontSize="10"
-            fontFamily="inherit"
-          >
-            {sublabel}
+          <text x={cx} y={cy + 20} textAnchor="middle"
+            fill="rgb(var(--text-muted))" fontSize="9.5" fontFamily="inherit" letterSpacing="0.5">
+            {sublabel.toUpperCase()}
           </text>
         )}
       </svg>
+
       {label && (
-        <span style={{ color: "rgb(var(--text-secondary))", fontSize: 12 }}>
-          {label}
-        </span>
+        <span style={{ color: "rgb(var(--text-secondary))", fontSize: 11 }}>{label}</span>
       )}
     </div>
   );
